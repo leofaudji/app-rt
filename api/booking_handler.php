@@ -111,36 +111,19 @@ try {
                 $stmt->bind_param("si", $new_status, $booking_id);
                 $stmt->execute();
                 $stmt->close();
-
-                // Get booking details to notify the user
-                $stmt_get_booking = $conn->prepare("
-                    SELECT b.warga_id, b.judul, w.nama_panggilan 
-                    FROM booking_fasilitas b
-                    JOIN warga w ON b.warga_id = w.id
-                    WHERE b.id = ?
-                ");
+                
+                // --- Kirim Notifikasi ke Warga ---
+                $stmt_get_booking = $conn->prepare("SELECT warga_id, judul FROM booking_fasilitas WHERE id = ?");
                 $stmt_get_booking->bind_param("i", $booking_id);
                 $stmt_get_booking->execute();
-                $booking_info = $stmt_get_booking->get_result()->fetch_assoc();
+                $booking_data = $stmt_get_booking->get_result()->fetch_assoc();
                 $stmt_get_booking->close();
 
-                if ($booking_info) {
-                    // Find user_id from warga's nama_panggilan
-                    $stmt_get_user = $conn->prepare("SELECT id FROM users WHERE username = ?");
-                    $stmt_get_user->bind_param("s", $booking_info['nama_panggilan']);
-                    $stmt_get_user->execute();
-                    $user_to_notify = $stmt_get_user->get_result()->fetch_assoc();
-                    $stmt_get_user->close();
-
-                    if ($user_to_notify) {
-                        $status_text = ($new_status === 'approved') ? 'DISETUJUI' : 'DITOLAK';
-                        $message = "Booking Anda '{$booking_info['judul']}' telah {$status_text}.";
-                        $link = '/booking';
-                        $stmt_notif = $conn->prepare("INSERT INTO notifications (user_id, type, message, link) VALUES (?, 'booking_status', ?, ?)");
-                        $stmt_notif->bind_param("iss", $user_to_notify['id'], $message, $link);
-                        $stmt_notif->execute();
-                        $stmt_notif->close();
-                    }
+                if ($booking_data) {
+                    $warga_id_to_notify = $booking_data['warga_id'];
+                    $status_text = ($new_status === 'approved') ? 'DISETUJUI' : 'DITOLAK';
+                    $message = "Booking Anda untuk '{$booking_data['judul']}' telah {$status_text}.";
+                    send_notification_to_warga($warga_id_to_notify, 'booking_status', $message, '/booking');
                 }
 
                 log_activity($_SESSION['username'], 'Update Booking', "Mengubah status booking ID {$booking_id} menjadi {$new_status}");

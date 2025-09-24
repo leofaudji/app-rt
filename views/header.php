@@ -62,7 +62,7 @@ $log_cleanup_days = (int)($app_settings['log_cleanup_interval_days'] ?? 180);
             <a class="nav-link" href="<?= base_url('/kegiatan') ?>"><i class="bi bi-calendar-event-fill"></i> Kegiatan</a>
         </li>
         <li class="nav-item">
-            <a class="nav-link" href="<?= base_url('/booking') ?>"><i class="bi bi-calendar-check-fill"></i> Booking Fasilitas</a>
+            <a class="nav-link" href="<?= base_url('/galeri') ?>"><i class="bi bi-images"></i> Galeri Foto</a>
         </li>
         <li class="nav-item">
             <a class="nav-link" href="<?= base_url('/polling') ?>"><i class="bi bi-bar-chart-steps"></i> Jajak Pendapat</a>
@@ -71,8 +71,8 @@ $log_cleanup_days = (int)($app_settings['log_cleanup_interval_days'] ?? 180);
             <a class="nav-link" href="<?= base_url('/dokumen') ?>"><i class="bi bi-folder-fill"></i> Repositori Dokumen</a>
         </li>
 
-        <!-- Layanan Mandiri -->
-        <li class="sidebar-header">Layanan Mandiri</li>
+        <!-- Layanan Warga -->
+        <li class="sidebar-header">Layanan Warga</li>
         <li class="nav-item">
             <a class="nav-link" href="<?= base_url('/keluarga-saya') ?>"><i class="bi bi-person-lines-fill"></i> Keluarga Saya</a>
         </li>
@@ -80,26 +80,32 @@ $log_cleanup_days = (int)($app_settings['log_cleanup_interval_days'] ?? 180);
             <a class="nav-link" href="<?= base_url('/surat-pengantar') ?>"><i class="bi bi-envelope-paper-fill"></i> Surat Pengantar</a>
         </li>
         <li class="nav-item">
-            <a class="nav-link" href="<?= base_url('/iuran-saya') ?>"><i class="bi bi-receipt"></i> Riwayat Iuran</a>
+            <a class="nav-link" href="<?= base_url('/laporan') ?>"><i class="bi bi-flag-fill"></i> Laporan Warga</a>
         </li>
         <li class="nav-item">
-            <a class="nav-link" href="<?= base_url('/laporan') ?>"><i class="bi bi-flag-fill"></i> Laporan Warga</a>
+            <a class="nav-link" href="<?= base_url('/booking') ?>"><i class="bi bi-calendar-check-fill"></i> Booking Fasilitas</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" href="<?= base_url('/iuran-saya') ?>"><i class="bi bi-receipt"></i> Riwayat Iuran</a>
         </li>
 
         <!-- Manajemen Keuangan (Bendahara & Admin) -->
         <?php if (isset($_SESSION['role']) && in_array($_SESSION['role'], ['admin', 'bendahara'])): ?>
             <li class="sidebar-header">Manajemen Keuangan</li>
             <li class="nav-item">
-                <a class="nav-link" href="<?= base_url('/iuran') ?>"><i class="bi bi-wallet2"></i> Iuran Warga</a>
+                <a class="nav-link" href="<?= base_url('/keuangan') ?>"><i class="bi bi-cash-coin"></i> Kas RT</a>
             </li>
             <li class="nav-item">
-                <a class="nav-link" href="<?= base_url('/keuangan') ?>"><i class="bi bi-cash-coin"></i> Kas RT</a>
+                <a class="nav-link" href="<?= base_url('/iuran') ?>"><i class="bi bi-wallet2"></i> Iuran Warga</a>
             </li>
             <li class="nav-item">
                 <a class="nav-link" href="<?= base_url('/anggaran') ?>"><i class="bi bi-clipboard-data-fill"></i> Anggaran</a>
             </li>
             <li class="nav-item">
                 <a class="nav-link" href="<?= base_url('/laporan-keuangan') ?>"><i class="bi bi-graph-up"></i> Laporan Keuangan</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="<?= base_url('/laporan/iuran') ?>"><i class="bi bi-person-x-fill"></i> Laporan Tunggakan</a>
             </li>
         <?php endif; ?>
 

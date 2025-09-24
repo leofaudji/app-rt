@@ -10,12 +10,28 @@ if (!$is_spa_request) {
 
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
     <h1 class="h2"><i class="bi bi-speedometer2"></i> Dashboard</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="d-flex align-items-center">
+            <div class="me-2">
+                <label for="dashboard-bulan-filter" class="form-label visually-hidden">Bulan</label>
+                <select id="dashboard-bulan-filter" class="form-select form-select-sm">
+                    <!-- Options will be populated by JS -->
+                </select>
+            </div>
+            <div class="me-2">
+                <label for="dashboard-tahun-filter" class="form-label visually-hidden">Tahun</label>
+                <select id="dashboard-tahun-filter" class="form-select form-select-sm">
+                    <!-- Options will be populated by JS -->
+                </select>
+            </div>
+        </div>
+    </div>
 </div>
 
 <div class="row">
     <!-- Card: Jumlah Warga -->
-    <div class="col-sm-6 col-lg-4 mb-4">
-        <div class="card text-white bg-primary">
+    <div class="col-lg-3 mb-4">
+        <div class="card text-white bg-primary h-100">
             <div class="card-body pb-0">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
@@ -32,18 +48,20 @@ if (!$is_spa_request) {
     </div>
 
     <!-- Card: Saldo Kas -->
-    <div class="col-sm-6 col-lg-4 mb-4">
-        <div class="card text-white bg-success">
-            <div class="card-body pb-0">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h5 class="card-title">Saldo Kas RT</h5>
+    <div class="col-lg-5 mb-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title text-muted">Saldo & Tren Kas</h5>
+                <div class="row align-items-center">
+                    <div class="col-md-5">
                         <h2 class="fw-bold" id="saldo-kas-widget"><div class="spinner-border spinner-border-sm" role="status"></div></h2>
+                        <a href="<?= base_url('/keuangan') ?>" class="small">Lihat Detail Kas <i class="bi bi-arrow-right-circle"></i></a>
                     </div>
-                    <i class="bi bi-cash-coin fs-1 opacity-50"></i>
-                </div>
-                <div class="card-footer bg-transparent border-0 p-0 text-end">
-                    <a href="<?= base_url('/keuangan') ?>" class="text-white stretched-link small">Lihat Detail <i class="bi bi-arrow-right-circle"></i></a>
+                    <div class="col-md-7">
+                        <div style="position: relative; height:100px; width:100%">
+                            <canvas id="saldo-trend-mini-chart"></canvas>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -51,7 +69,7 @@ if (!$is_spa_request) {
 
     <!-- Card: Ringkasan Iuran -->
     <?php if (in_array($_SESSION['role'], ['admin', 'bendahara'])): ?>
-    <div class="col-sm-12 col-lg-4 mb-4">
+    <div class="col-lg-4 mb-4">
         <div class="card text-white bg-info">
             <div class="card-body pb-0">
                 <div class="d-flex justify-content-between align-items-center">
@@ -117,24 +135,9 @@ if (!$is_spa_request) {
     </div>
 </div>
 
+<!-- Baris Khusus Admin & Bendahara -->
+<?php if (in_array($_SESSION['role'], ['admin', 'bendahara'])): ?>
 <div class="row">
-    <div class="col-12 mb-4">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="card-title mb-0"><i class="bi bi-graph-up-arrow"></i> Tren Saldo Kas (6 Bulan Terakhir)</h5>
-            </div>
-            <div class="card-body">
-                <div style="position: relative; height:300px; width:100%">
-                    <canvas id="saldo-trend-chart"></canvas>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="row">
-    <!-- Widget: Tugas Administratif -->
-    <?php if (in_array($_SESSION['role'], ['admin', 'bendahara'])): ?>
     <div class="col-lg-4 mb-4">
         <div class="card h-100">
             <div class="card-header">
@@ -147,7 +150,35 @@ if (!$is_spa_request) {
             </div>
         </div>
     </div>
-    <?php endif; ?>
+    <div class="col-lg-4 mb-4">
+        <div class="card h-100 border-danger">
+            <div class="card-header bg-danger text-white">
+                <h5 class="card-title mb-0"><i class="bi bi-person-x-fill"></i> Warga Menunggak Iuran (>2 Bulan)</h5>
+            </div>
+            <div class="card-body" style="overflow-y: auto; max-height: 250px;">
+                <ul class="list-group list-group-flush" id="iuran-menunggak-widget">
+                    <li class="list-group-item text-center"><div class="spinner-border spinner-border-sm"></div></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4 mb-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="card-title mb-0"><i class="bi bi-gift-fill"></i> Ulang Tahun Bulan Ini</h5>
+            </div>
+            <div class="card-body" style="overflow-y: auto; max-height: 250px;">
+                <ul class="list-group list-group-flush" id="birthday-widget-list">
+                    <li class="list-group-item text-center"><div class="spinner-border spinner-border-sm"></div></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
+<!-- Baris Informasi Umum -->
+<div class="row">
     <!-- Widget: Pengumuman Terbaru -->
     <div class="col-lg-4 mb-4">
         <div class="card h-100">
@@ -180,9 +211,6 @@ if (!$is_spa_request) {
             </div>
         </div>
     </div>
-</div>
-
-<div class="row">
     <!-- Widget: Warga Baru -->
     <div class="col-lg-4 mb-4">
         <div class="card h-100">
@@ -196,37 +224,6 @@ if (!$is_spa_request) {
             </div>
         </div>
     </div>
-    <!-- Widget: Ulang Tahun Bulan Ini -->
-    <div class="col-lg-4 mb-4">
-        <div class="card h-100">
-            <div class="card-header">
-                <h5 class="card-title mb-0"><i class="bi bi-gift-fill"></i> Ulang Tahun Bulan Ini</h5>
-            </div>
-            <div class="card-body" style="overflow-y: auto; max-height: 250px;">
-                <ul class="list-group list-group-flush" id="birthday-widget-list">
-                    <li class="list-group-item text-center"><div class="spinner-border spinner-border-sm"></div></li>
-                </ul>
-            </div>
-        </div>
-    </div>
-    <!-- Widget: Log Keuangan Terbaru -->
-    <?php if (in_array($_SESSION['role'], ['admin', 'bendahara'])): ?>
-    <div class="col-lg-4 mb-4">
-        <div class="card h-100">
-            <div class="card-header">
-                <h5 class="card-title mb-0"><i class="bi bi-receipt-cutoff"></i> Log Keuangan Terbaru</h5>
-            </div>
-            <div class="card-body">
-                <div class="list-group list-group-flush" id="recent-transactions-widget">
-                    <div class="text-center"><div class="spinner-border spinner-border-sm"></div></div>
-                </div>
-            </div>
-             <div class="card-footer text-center">
-                <a href="<?= base_url('/keuangan') ?>" class="btn btn-outline-primary btn-sm w-100">Lihat Semua Transaksi</a>
-            </div>
-        </div>
-    </div>
-    <?php endif; ?>
 </div>
 
 <?php

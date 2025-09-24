@@ -166,6 +166,9 @@ function runPageScripts(path) {
     else if (cleanPath === '/rumah') {
         initRumahPage();
     }
+    else if (cleanPath.startsWith('/rumah/detail/')) {
+        initRumahDetailPage();
+    }
     else if (cleanPath === '/iuran') {
         initIuranPage();
     }
@@ -217,8 +220,17 @@ function runPageScripts(path) {
     else if (cleanPath === '/laporan/surat') {
         initLaporanSuratPage();
     }
+    else if (cleanPath === '/galeri') {
+        initGaleriPage();
+    }
+    else if (cleanPath.startsWith('/galeri/album/')) {
+        initGaleriAlbumPage();
+    }
     else if (cleanPath === '/aset') {
         initAsetPage();
+    }
+    else if (cleanPath === '/laporan/iuran') {
+        initLaporanIuranPage();
     }
     else if (cleanPath === '/log-aktivitas') {
         initLogAktivitasPage();
@@ -251,21 +263,56 @@ function initDashboardPage() {
     const iuranSummaryWidget = document.getElementById('iuran-summary-widget');
     const newResidentsWidget = document.getElementById('new-residents-widget');
     const iuranProgressBar = document.getElementById('iuran-progress-bar');
-    const recentTransactionsWidget = document.getElementById('recent-transactions-widget');
-    const saldoTrendChartCanvas = document.getElementById('saldo-trend-chart');
-    let rumahStatusChart, demographicsChart, kasMonthlyChart, saldoTrendChart;
+    const saldoTrendMiniChartCanvas = document.getElementById('saldo-trend-mini-chart');
+    const iuranMenunggakWidget = document.getElementById('iuran-menunggak-widget');
+    let rumahStatusChart, demographicsChart, kasMonthlyChart, saldoTrendMiniChart;
 
-    if (!totalWargaWidget) return; // Cukup cek satu widget saja
+    const bulanFilter = document.getElementById('dashboard-bulan-filter');
+    const tahunFilter = document.getElementById('dashboard-tahun-filter');
 
-    fetch(`${basePath}/api/dashboard`)
-        .then(response => response.json())
-        .then(result => {
+    if (!totalWargaWidget || !bulanFilter || !tahunFilter) return;
+
+    function setupFilters() {
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth() + 1;
+
+        // Populate years
+        for (let i = 0; i < 5; i++) {
+            const year = currentYear - i;
+            tahunFilter.add(new Option(year, year));
+        }
+
+        // Populate months
+        const months = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+        months.forEach((month, index) => {
+            bulanFilter.add(new Option(month, index + 1));
+        });
+
+        // Set default to current month and year
+        bulanFilter.value = currentMonth;
+        tahunFilter.value = currentYear;
+    }
+
+    async function fetchDashboardData(bulan, tahun) {
+        // Show spinners
+        const spinners = [totalWargaWidget, saldoKasWidget, iuranSummaryWidget, birthdayWidgetList, latestAnnouncementsWidget, upcomingActivitiesWidget, adminTasksWidget, newResidentsWidget, iuranMenunggakWidget];
+        spinners.forEach(el => {
+            if (el) {
+                const spinnerHtml = el.tagName === 'UL' || el.tagName === 'DIV' ? '<div class="text-center"><div class="spinner-border spinner-border-sm"></div></div>' : '<div class="spinner-border spinner-border-sm"></div>';
+                el.innerHTML = spinnerHtml;
+            }
+        });
+
+        try {
+            const response = await fetch(`${basePath}/api/dashboard?bulan=${bulan}&tahun=${tahun}`);
+            const result = await response.json();
+
             if (result.status === 'success') {
                 const data = result.data;
                 if (totalWargaWidget) totalWargaWidget.textContent = data.total_warga;
                 if (saldoKasWidget) saldoKasWidget.textContent = data.saldo_kas;
 
-                // Render Rumah Status Chart
                 if (rumahStatusChartCanvas && data.status_rumah) {
                     if (rumahStatusChart) {
                         rumahStatusChart.destroy();
@@ -298,8 +345,6 @@ function initDashboardPage() {
                         }
                     });
                 }
-
-                // Render Demographics Chart
                 if (demographicsChartCanvas && data.demografi) {
                     if (demographicsChart) {
                         demographicsChart.destroy();
@@ -328,8 +373,6 @@ function initDashboardPage() {
                         }
                     });
                 }
-
-                // Render Kas Bulanan Chart
                 if (kasMonthlyChartCanvas && data.kas_bulanan) {
                     if (kasMonthlyChart) {
                         kasMonthlyChart.destroy();
@@ -371,8 +414,52 @@ function initDashboardPage() {
                         }
                     });
                 }
-
-                // Render Iuran Summary Widget
+                if (saldoTrendMiniChartCanvas && data.saldo_trend) {
+                    if (saldoTrendMiniChart) {
+                        saldoTrendMiniChart.destroy();
+                    }
+                    const ctx = saldoTrendMiniChartCanvas.getContext('2d');
+                    saldoTrendMiniChart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: data.saldo_trend.labels,
+                            datasets: [{
+                                label: 'Saldo Kas',
+                                data: data.saldo_trend.data,
+                                fill: true,
+                                backgroundColor: 'rgba(25, 135, 84, 0.1)',
+                                borderColor: 'rgba(25, 135, 84, 1)',
+                                tension: 0.3,
+                                pointRadius: 0,
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                y: { display: false },
+                                x: { display: false }
+                            },
+                            plugins: {
+                                legend: { display: false },
+                                tooltip: {
+                                    mode: 'index',
+                                    intersect: false,
+                                    callbacks: {
+                                        label: function(context) {
+                                            let label = context.dataset.label || '';
+                                            if (label) { label += ': '; }
+                                            if (context.parsed.y !== null) {
+                                                label += new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(context.parsed.y);
+                                            }
+                                            return label;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
                 if (iuranSummaryWidget && data.iuran_summary) {
                     const summary = data.iuran_summary;
                     iuranSummaryWidget.innerHTML = `<h2 class="fw-bold">${summary.kk_lunas} / ${summary.total_kk} KK Lunas</h2>`;
@@ -383,8 +470,6 @@ function initDashboardPage() {
                 } else if (iuranSummaryWidget) {
                     iuranSummaryWidget.innerHTML = '<h2 class="fw-bold">-</h2>';
                 }
-
-                // Render Admin Tasks Widget
                 if (adminTasksWidget && data.admin_tasks) {
                     adminTasksWidget.innerHTML = ''; // Clear spinner
                     if (data.admin_tasks.length > 0) {
@@ -403,8 +488,6 @@ function initDashboardPage() {
                         `;
                     }
                 }
-
-                // Render Birthday Widget
                 if (birthdayWidgetList && data.ulang_tahun_bulan_ini) {
                     birthdayWidgetList.innerHTML = ''; // Clear spinner
                     if (data.ulang_tahun_bulan_ini.length > 0) {
@@ -423,8 +506,6 @@ function initDashboardPage() {
                         birthdayWidgetList.innerHTML = '<li class="list-group-item text-muted">Tidak ada yang berulang tahun bulan ini.</li>';
                     }
                 }
-
-                // Render Latest Announcements Widget
                 if (latestAnnouncementsWidget && data.pengumuman_terbaru) {
                     latestAnnouncementsWidget.innerHTML = ''; // Clear spinner
                     if (data.pengumuman_terbaru.length > 0) {
@@ -444,8 +525,6 @@ function initDashboardPage() {
                         latestAnnouncementsWidget.innerHTML = '<p class="text-muted mb-0">Tidak ada pengumuman baru.</p>';
                     }
                 }
-
-                // Render Upcoming Activities Widget
                 if (upcomingActivitiesWidget && data.kegiatan_akan_datang) {
                     upcomingActivitiesWidget.innerHTML = ''; // Clear spinner
                     if (data.kegiatan_akan_datang.length > 0) {
@@ -466,23 +545,52 @@ function initDashboardPage() {
                         upcomingActivitiesWidget.innerHTML = '<p class="text-muted mb-0">Tidak ada kegiatan yang dijadwalkan.</p>';
                     }
                 }
+                if (iuranMenunggakWidget && data.iuran_menunggak) {
+                    iuranMenunggakWidget.innerHTML = ''; // Clear spinner
+                    if (data.iuran_menunggak.length > 0) {
+                        data.iuran_menunggak.forEach(warga => {
+                            const item = `
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <a href="${basePath}/iuran/histori/${warga.no_kk}/kk" class="text-decoration-none text-dark">${warga.nama_lengkap}</a>
+                                    <span class="badge bg-danger rounded-pill">${warga.jumlah_tunggakan} bln</span>
+                                </li>
+                            `;
+                            iuranMenunggakWidget.insertAdjacentHTML('beforeend', item);
+                        });
+                    } else {
+                        iuranMenunggakWidget.innerHTML = `
+                            <li class="list-group-item text-muted text-center">
+                                <i class="bi bi-check-all"></i> Semua warga patuh membayar iuran.
+                            </li>`;
+                    }
+                }
             } else {
-                [totalWargaWidget, saldoKasWidget].forEach(el => { if(el) el.textContent = 'Error' });
-                showToast(result.message, 'error');
+                throw new Error(result.message || 'Gagal memuat data.');
             }
-        })
-        .catch(error => {
+        } catch (error) {
             console.error('Error loading dashboard data:', error);
-            [totalWargaWidget, saldoKasWidget].forEach(el => { if(el) el.textContent = 'Error' });
+            [totalWargaWidget, saldoKasWidget].forEach(el => { if (el) el.textContent = 'Error' });
             if (birthdayWidgetList) birthdayWidgetList.innerHTML = '<li class="list-group-item text-danger">Gagal memuat.</li>';
             if (latestAnnouncementsWidget) latestAnnouncementsWidget.innerHTML = '<p class="text-danger mb-0">Gagal memuat.</p>';
             if (upcomingActivitiesWidget) upcomingActivitiesWidget.innerHTML = '<p class="text-danger mb-0">Gagal memuat.</p>';
             if (adminTasksWidget) adminTasksWidget.innerHTML = '<div class="list-group-item text-danger">Gagal memuat.</div>';
-            if (saldoTrendChartCanvas) saldoTrendChartCanvas.parentElement.innerHTML = '<div class="alert alert-danger">Gagal memuat grafik.</div>';
-            if (recentTransactionsWidget) recentTransactionsWidget.innerHTML = '<div class="list-group-item text-danger">Gagal memuat.</div>';
             if (newResidentsWidget) newResidentsWidget.innerHTML = '<div class="list-group-item text-danger">Gagal memuat.</div>';
             if (iuranSummaryWidget) iuranSummaryWidget.innerHTML = '<h2 class="fw-bold">Error</h2>';
-        });
+            if (iuranMenunggakWidget) iuranMenunggakWidget.innerHTML = '<li class="list-group-item text-danger">Gagal memuat.</li>';
+        }
+    }
+
+    // --- Event Listeners ---
+    const handleFilterChange = () => {
+        fetchDashboardData(bulanFilter.value, tahunFilter.value);
+    };
+
+    bulanFilter.addEventListener('change', handleFilterChange);
+    tahunFilter.addEventListener('change', handleFilterChange);
+
+    // --- Initial Load ---
+    setupFilters();
+    fetchDashboardData(bulanFilter.value, tahunFilter.value);
 }
 
 function initWargaPage() {
@@ -495,6 +603,7 @@ function initWargaPage() {
     const wargaModal = new bootstrap.Modal(wargaModalEl);
     const wargaForm = document.getElementById('warga-form');
     const saveWargaBtn = document.getElementById('save-warga-btn');
+    const limitSelect = document.getElementById('warga-limit');
     const keluargaModalEl = document.getElementById('keluargaModal');
     const keluargaModal = new bootstrap.Modal(keluargaModalEl);
     const paginationContainer = document.getElementById('warga-pagination');
@@ -529,10 +638,15 @@ function initWargaPage() {
     }
 
     // --- Data Loading ---
-    async function loadWarga(searchTerm = '', currentSortBy = 'nama_lengkap', currentSortDir = 'asc', page = 1) {
+    async function loadWarga(searchTerm = '', currentSortBy = 'nama_lengkap', currentSortDir = 'asc', page = 1, perPage = '10') {
         wargaTableBody.innerHTML = '<tr><td colspan="15" class="text-center">Memuat data...</td></tr>';
         try {
-            const response = await fetch(`${basePath}/api/warga?action=list&search=${encodeURIComponent(searchTerm)}&sort_by=${currentSortBy}&sort_dir=${currentSortDir}&page=${page}`);
+            let apiUrl = `${basePath}/api/warga?action=list&search=${encodeURIComponent(searchTerm)}&sort_by=${currentSortBy}&sort_dir=${currentSortDir}&page=${page}`;
+            if (perPage !== 'all') {
+                apiUrl += `&limit=${perPage}`;
+            }
+
+            const response = await fetch(apiUrl);
             const result = await response.json();
             wargaTableBody.innerHTML = ''; // Clear loading
             if (result.status === 'success' && result.data.length > 0) {
@@ -570,80 +684,14 @@ function initWargaPage() {
             } else {
                 wargaTableBody.innerHTML = '<tr><td colspan="15" class="text-center">Tidak ada data ditemukan.</td></tr>';
             }
-            renderWargaPagination(result.pagination);
+            renderPagination(paginationContainer, result.pagination, (newPage) => {
+                loadWarga(searchInput.value, sortBy, sortDir, newPage, limitSelect.value);
+            });
             currentPage = page;
         } catch (error) {
             wargaTableBody.innerHTML = `<tr><td colspan="15" class="text-center text-danger">Gagal memuat data.</td></tr>`;
-            renderWargaPagination(null);
+            renderPagination(paginationContainer, null);
         }
-    }
-
-    function renderWargaPagination(pagination) {
-        if (!paginationContainer) return;
-        paginationContainer.innerHTML = '';
-        if (!pagination || pagination.total_pages <= 1) return;
-
-        const { current_page, total_pages } = pagination;
-
-        // Previous button
-        const prevDisabled = current_page === 1 ? 'disabled' : '';
-        paginationContainer.insertAdjacentHTML('beforeend', `
-            <li class="page-item ${prevDisabled}">
-                <a class="page-link" href="#" data-page="${current_page - 1}">Previous</a>
-            </li>
-        `);
-
-        // Page numbers logic (with ellipsis)
-        const maxPagesToShow = 5;
-        let startPage, endPage;
-        if (total_pages <= maxPagesToShow) {
-            startPage = 1;
-            endPage = total_pages;
-        } else {
-            const maxPagesBeforeCurrent = Math.floor(maxPagesToShow / 2);
-            const maxPagesAfterCurrent = Math.ceil(maxPagesToShow / 2) - 1;
-            if (current_page <= maxPagesBeforeCurrent) {
-                startPage = 1;
-                endPage = maxPagesToShow;
-            } else if (current_page + maxPagesAfterCurrent >= total_pages) {
-                startPage = total_pages - maxPagesToShow + 1;
-                endPage = total_pages;
-            } else {
-                startPage = current_page - maxPagesBeforeCurrent;
-                endPage = current_page + maxPagesAfterCurrent;
-            }
-        }
-
-        if (startPage > 1) {
-            paginationContainer.insertAdjacentHTML('beforeend', `<li class="page-item"><a class="page-link" href="#" data-page="1">1</a></li>`);
-            if (startPage > 2) {
-                paginationContainer.insertAdjacentHTML('beforeend', `<li class="page-item disabled"><span class="page-link">...</span></li>`);
-            }
-        }
-
-        for (let i = startPage; i <= endPage; i++) {
-            const activeClass = i === current_page ? 'active' : '';
-            paginationContainer.insertAdjacentHTML('beforeend', `
-                <li class="page-item ${activeClass}">
-                    <a class="page-link" href="#" data-page="${i}">${i}</a>
-                </li>
-            `);
-        }
-
-        if (endPage < total_pages) {
-            if (endPage < total_pages - 1) {
-                paginationContainer.insertAdjacentHTML('beforeend', `<li class="page-item disabled"><span class="page-link">...</span></li>`);
-            }
-            paginationContainer.insertAdjacentHTML('beforeend', `<li class="page-item"><a class="page-link" href="#" data-page="${total_pages}">${total_pages}</a></li>`);
-        }
-
-        // Next button
-        const nextDisabled = current_page === total_pages ? 'disabled' : '';
-        paginationContainer.insertAdjacentHTML('beforeend', `
-            <li class="page-item ${nextDisabled}">
-                <a class="page-link" href="#" data-page="${current_page + 1}">Next</a>
-            </li>
-        `);
     }
 
     // --- KK Dropdown Loading ---
@@ -699,14 +747,18 @@ function initWargaPage() {
     let debounceTimer;
     searchInput.addEventListener('input', () => {
         clearTimeout(debounceTimer);
-        currentPage = 1;
         debounceTimer = setTimeout(() => {
-            loadWarga(searchInput.value, sortBy, sortDir, currentPage);
+            currentPage = 1;
+            loadWarga(searchInput.value, sortBy, sortDir, currentPage, limitSelect.value);
             updatePrintLink(searchInput.value);
             updateExportLink(searchInput.value);
         }, 300);
     });
 
+    limitSelect.addEventListener('change', () => {
+        currentPage = 1;
+        loadWarga(searchInput.value, sortBy, sortDir, currentPage, limitSelect.value);
+    });
     if (wargaTableHead) {
         wargaTableHead.addEventListener('click', (e) => {
             const th = e.target.closest('th.sortable');
@@ -724,20 +776,7 @@ function initWargaPage() {
             wargaTableHead.querySelectorAll('th.sortable').forEach(header => header.classList.remove('asc', 'desc'));
             th.classList.add(sortDir);
 
-            loadWarga(searchInput.value, sortBy, sortDir, currentPage);
-        });
-    }
-
-    if (paginationContainer) {
-        paginationContainer.addEventListener('click', (e) => {
-            e.preventDefault();
-            const pageLink = e.target.closest('.page-link');
-            if (pageLink && !pageLink.parentElement.classList.contains('disabled')) {
-                const page = parseInt(pageLink.dataset.page, 10);
-                if (page !== currentPage) {
-                    loadWarga(searchInput.value, sortBy, sortDir, page);
-                }
-            }
+            loadWarga(searchInput.value, sortBy, sortDir, currentPage, limitSelect.value);
         });
     }
 
@@ -828,7 +867,7 @@ function initWargaPage() {
             if (result.status === 'success') {
                 wargaModal.hide();
                 showToast(result.message, 'success');
-                loadWarga(searchInput.value, sortBy, sortDir, currentPage);
+                loadWarga(searchInput.value, sortBy, sortDir, currentPage, limitSelect.value);
                 loadKKListForSelect(); // Reload KK list in case a new one was added
             } else {
                 showToast(result.message, 'error');
@@ -903,7 +942,7 @@ function initWargaPage() {
                     const result = await response.json();
                     showToast(result.message, result.status === 'success' ? 'success' : 'error');
                     if (result.status === 'success') {
-                        loadWarga(searchInput.value, sortBy, sortDir, currentPage);
+                        loadWarga(searchInput.value, sortBy, sortDir, currentPage, limitSelect.value);
                     } else {
                         deleteBtn.disabled = false;
                         deleteBtn.innerHTML = originalIcon;
@@ -963,7 +1002,7 @@ function initWargaPage() {
     updatePrintLink(); // Set initial print link
     updateExportLink(); // Set initial export link
     loadKKListForSelect(); // Load KK list for the modal
-    loadWarga('', sortBy, sortDir, currentPage); // Initial data load
+    loadWarga('', sortBy, sortDir, currentPage, limitSelect.value); // Initial data load
 }
 
 function initWargaProfilePage() {
@@ -1053,6 +1092,8 @@ function initKeuanganPage() {
     const kasModal = new bootstrap.Modal(kasModalEl);
     const kasForm = document.getElementById('kas-form');
     const saveKasBtn = document.getElementById('save-kas-btn');
+    const limitSelect = document.getElementById('kas-limit');
+    const paginationContainer = document.getElementById('kas-pagination');
     const jenisSelectModal = document.getElementById('jenis');
     const kategoriSelectModal = document.getElementById('kategori');
 
@@ -1079,10 +1120,15 @@ function initKeuanganPage() {
         });
     }
 
-    async function loadKas(searchTerm = '', jenis = '') {
+    async function loadKas(searchTerm = '', jenis = '', page = 1, perPage = '10') {
         kasTableBody.innerHTML = '<tr><td colspan="7" class="text-center">Memuat data...</td></tr>';
         try {
-            const response = await fetch(`${basePath}/api/kas?search=${encodeURIComponent(searchTerm)}&jenis=${encodeURIComponent(jenis)}`);
+            let apiUrl = `${basePath}/api/kas?search=${encodeURIComponent(searchTerm)}&jenis=${encodeURIComponent(jenis)}&page=${page}`;
+            if (perPage !== 'all') {
+                apiUrl += `&limit=${perPage}`;
+            }
+
+            const response = await fetch(apiUrl);
             const result = await response.json();
             kasTableBody.innerHTML = '';
             if (result.status === 'success' && result.data.length > 0) {
@@ -1105,21 +1151,26 @@ function initKeuanganPage() {
             } else {
                 kasTableBody.innerHTML = '<tr><td colspan="7" class="text-center">Tidak ada data transaksi ditemukan.</td></tr>';
             }
+            renderPagination(paginationContainer, result.pagination, (newPage) => {
+                loadKas(searchInput.value, jenisFilter.value, newPage, limitSelect.value);
+            });
         } catch (error) {
             kasTableBody.innerHTML = `<tr><td colspan="7" class="text-center text-danger">Gagal memuat data.</td></tr>`;
+            renderPagination(paginationContainer, null);
         }
     }
 
     let debounceTimer;
     const combinedFilterHandler = () => {
         clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(() => {
-            loadKas(searchInput.value, jenisFilter.value);
-        }, 300);
+        debounceTimer = setTimeout(() => loadKas(searchInput.value, jenisFilter.value, 1, limitSelect.value), 300);
     };
 
     searchInput.addEventListener('input', combinedFilterHandler);
     jenisFilter.addEventListener('change', combinedFilterHandler);
+    limitSelect.addEventListener('change', () => {
+        loadKas(searchInput.value, jenisFilter.value, 1, limitSelect.value);
+    });
 
     if (jenisSelectModal) {
         jenisSelectModal.addEventListener('change', (e) => updateKategoriOptions(e.target.value));
@@ -1144,7 +1195,7 @@ function initKeuanganPage() {
             if (result.status === 'success') {
                 kasModal.hide();
                 showToast(result.message, 'success');
-                loadKas(searchInput.value, jenisFilter.value);
+                loadKas(searchInput.value, jenisFilter.value, 1, limitSelect.value);
             } else {
                 showToast(result.message, 'error');
             }
@@ -1198,7 +1249,7 @@ function initKeuanganPage() {
                     const result = await response.json();
                     showToast(result.message, result.status === 'success' ? 'success' : 'error');
                     if (result.status === 'success') {
-                        loadKas(searchInput.value, jenisFilter.value);
+                        loadKas(searchInput.value, jenisFilter.value, 1, limitSelect.value);
                     } else {
                         deleteBtn.disabled = false;
                         deleteBtn.innerHTML = originalIcon;
@@ -1225,7 +1276,7 @@ function initKeuanganPage() {
         }
     });
 
-    loadKas();
+    loadKas(searchInput.value, jenisFilter.value, 1, limitSelect.value);
 }
 
 function initUsersPage() {
@@ -1413,7 +1464,9 @@ function initRumahPage() {
                         : '<span class="text-muted">-</span>';
                     const row = `
                         <tr>
-                            <td><strong>${r.blok} / ${r.nomor}</strong></td>
+                            <td>
+                                <a href="${basePath}/rumah/detail/${r.id}"><strong>${r.blok} / ${r.nomor}</strong></a>
+                            </td>
                             <td>${r.pemilik || '-'}</td>
                             <td>
                                 ${r.kepala_keluarga ? `<a href="#" class="view-anggota" data-kk="${r.no_kk_penghuni}">${r.kepala_keluarga}</a>` : '<span class="text-muted">Tidak berpenghuni</span>'}
@@ -1703,6 +1756,100 @@ function initRumahPage() {
     loadKKList();
 }
 
+function initRumahDetailPage() {
+    const container = document.getElementById('rumah-detail-container');
+    if (!container) return;
+
+    const rumahId = container.dataset.rumahId;
+    const alamatEl = document.getElementById('rumah-detail-alamat');
+    const infoContentEl = document.getElementById('rumah-info-content');
+    const historyContentEl = document.getElementById('rumah-history-content');
+    const printHistoryBtn = document.getElementById('print-history-btn');
+
+    async function loadDetail() {
+        try {
+            const response = await fetch(`${basePath}/api/rumah?action=get_detail&id=${rumahId}`);
+            const result = await response.json();
+
+            if (result.status !== 'success' || !result.data.info) {
+                throw new Error(result.message || 'Data rumah tidak ditemukan.');
+            }
+
+            const { info, anggota, histori } = result.data;
+
+            // Render Header
+            const alamatText = `Blok ${info.blok} No. ${info.nomor}`;
+            alamatEl.textContent = alamatText;
+            document.title = `Detail Rumah - ${alamatText}`;
+
+            // Render Info Rumah & Penghuni
+            let infoHtml = `
+                <dl class="row">
+                    <dt class="col-sm-4">Pemilik Properti</dt>
+                    <dd class="col-sm-8">${info.pemilik || '-'}</dd>
+                </dl>
+                <hr>
+                <h5>Penghuni Saat Ini</h5>
+            `;
+            if (info.kepala_keluarga) {
+                infoHtml += `
+                    <dl class="row">
+                        <dt class="col-sm-4">Kepala Keluarga</dt>
+                        <dd class="col-sm-8">${info.kepala_keluarga}</dd>
+                        <dt class="col-sm-4">No. KK</dt>
+                        <dd class="col-sm-8">${info.no_kk_penghuni}</dd>
+                        <dt class="col-sm-4">Status Tinggal</dt>
+                        <dd class="col-sm-8"><span class="badge bg-${info.status_tinggal === 'tetap' ? 'success' : 'warning'}">${info.status_tinggal}</span></dd>
+                    </dl>
+                    <h6>Anggota Keluarga:</h6>
+                    <ul class="list-group list-group-flush">
+                `;
+                if (anggota.length > 0) {
+                    anggota.forEach(a => {
+                        infoHtml += `<li class="list-group-item">${a.nama_lengkap} <span class="text-muted small">(${a.status_dalam_keluarga})</span></li>`;
+                    });
+                } else {
+                    infoHtml += `<li class="list-group-item text-muted">Hanya kepala keluarga yang terdata.</li>`;
+                }
+                infoHtml += `</ul>`;
+            } else {
+                infoHtml += `<p class="text-muted">Rumah ini sedang tidak berpenghuni.</p>`;
+            }
+            infoContentEl.innerHTML = infoHtml;
+
+            // Render Histori
+            historyContentEl.innerHTML = '';
+            if (histori.length > 0) {
+                histori.forEach(h => {
+                    const tglMasuk = new Date(h.tanggal_masuk).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+                    const tglKeluar = h.tanggal_keluar ? new Date(h.tanggal_keluar).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '<span class="badge bg-success">Sekarang</span>';
+                    historyContentEl.innerHTML += `
+                        <tr>
+                            <td>${h.kepala_keluarga || '(Data tidak ada)'}</td>
+                            <td>${tglMasuk}</td>
+                            <td>${tglKeluar}</td>
+                        </tr>
+                    `;
+                });
+                printHistoryBtn.disabled = false;
+                printHistoryBtn.onclick = () => {
+                    window.open(`${basePath}/rumah/histori/cetak?id=${rumahId}`, '_blank');
+                };
+            } else {
+                historyContentEl.innerHTML = `<tr><td colspan="3" class="text-center text-muted">Belum ada histori.</td></tr>`;
+            }
+
+        } catch (error) {
+            const errorHtml = `<div class="alert alert-danger">${error.message}</div>`;
+            alamatEl.textContent = 'Error';
+            infoContentEl.innerHTML = errorHtml;
+            historyContentEl.innerHTML = `<tr><td colspan="3" class="text-center text-danger">Gagal memuat.</td></tr>`;
+        }
+    }
+
+    loadDetail();
+}
+
 function initIuranPage() {
     const iuranTableBody = document.getElementById('iuran-table-body');
     const bulanFilter = document.getElementById('filter-bulan');
@@ -1711,6 +1858,8 @@ function initIuranPage() {
     const statusFilter = document.getElementById('filter-status-pembayaran');
     const bayarModalEl = document.getElementById('bayarModal');
     const bayarModal = new bootstrap.Modal(bayarModalEl);
+    const limitSelect = document.getElementById('iuran-limit');
+    const paginationContainer = document.getElementById('iuran-pagination');
     const printBtn = document.getElementById('cetak-iuran-btn');
     const saveBayarBtn = document.getElementById('save-bayar-btn');
 
@@ -1790,16 +1939,21 @@ function initIuranPage() {
         tahunFilter.value = currentYear;
     }
 
-    async function loadIuran() {
+    async function loadIuran(page = 1) {
         const tahun = tahunFilter.value;
         const bulan = bulanFilter.value;
         const searchTerm = searchInput.value;
         const status = statusFilter.value;
+        const perPage = limitSelect.value;
         if (!tahun || !bulan) return;
 
         iuranTableBody.innerHTML = '<tr><td colspan="5" class="text-center">Memuat data...</td></tr>';
         try {
-            const response = await fetch(`${basePath}/api/iuran?action=list&tahun=${tahun}&bulan=${bulan}&status=${status}&search=${encodeURIComponent(searchTerm)}`);
+            let apiUrl = `${basePath}/api/iuran?action=list&tahun=${tahun}&bulan=${bulan}&status=${status}&search=${encodeURIComponent(searchTerm)}&page=${page}`;
+            if (perPage !== 'all') {
+                apiUrl += `&limit=${perPage}`;
+            }
+            const response = await fetch(apiUrl);
             const result = await response.json();
             iuranTableBody.innerHTML = '';
             if (result.status === 'success' && result.data.length > 0) {
@@ -1831,35 +1985,30 @@ function initIuranPage() {
             } else {
                 iuranTableBody.innerHTML = '<tr><td colspan="5" class="text-center">Tidak ada data warga ditemukan.</td></tr>';
             }
+            renderPagination(paginationContainer, result.pagination, (newPage) => {
+                loadIuran(newPage);
+            });
         } catch (error) {
             iuranTableBody.innerHTML = `<tr><td colspan="5" class="text-center text-danger">Gagal memuat data.</td></tr>`;
+            renderPagination(paginationContainer, null);
         }
     }
 
     let debounceTimer;
-    searchInput.addEventListener('input', () => {
+    const combinedFilterHandler = () => {
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => {
-            loadIuran();
+            loadIuran(1);
             loadIuranSummary();
             updatePrintLink();
         }, 300);
-    });
-    bulanFilter.addEventListener('change', () => {
-        loadIuran();
-        loadIuranSummary();
-        updatePrintLink();
-    });
-    tahunFilter.addEventListener('change', () => {
-        loadIuran();
-        loadIuranSummary();
-        updatePrintLink();
-    });
-    statusFilter.addEventListener('change', () => {
-        loadIuran();
-        loadIuranSummary();
-        updatePrintLink();
-    });
+    };
+
+    searchInput.addEventListener('input', combinedFilterHandler);
+    bulanFilter.addEventListener('change', combinedFilterHandler);
+    tahunFilter.addEventListener('change', combinedFilterHandler);
+    statusFilter.addEventListener('change', combinedFilterHandler);
+    limitSelect.addEventListener('change', combinedFilterHandler);
 
     iuranTableBody.addEventListener('click', (e) => {
         const bayarBtn = e.target.closest('.bayar-btn');
@@ -1896,7 +2045,7 @@ function initIuranPage() {
             if (result.status === 'success') {
                 bayarModal.hide();
                 showToast(result.message, 'success');
-                loadIuran();
+                loadIuran(1);
                 loadIuranSummary(); // Also refresh the summary
             } else {
                 showToast(result.message, 'error');
@@ -1911,7 +2060,7 @@ function initIuranPage() {
 
     setupFilters();
     loadIuranSummary(); // Load summary on initial page load
-    loadIuran();
+    loadIuran(1);
     updatePrintLink(); // Initial call
 }
 
@@ -3073,11 +3222,11 @@ function initSuratPengantarPage() {
             document.getElementById('surat-info-view').classList.remove('d-none');
 
             document.getElementById('view-pemohon').textContent = suratData.pemohon;
-            document.getElementById('view-jenis-surat').textContent = suratData.jenis_surat;
+            document.getElementById('view-jenis-surat').textContent = suratData.jenis_surat || '(Tidak Ditemukan)';
             document.getElementById('view-keperluan').textContent = suratData.keperluan;
             document.getElementById('nomor_surat').value = suratData.nomor_surat || '';
             document.getElementById('keterangan_admin').value = suratData.keterangan_admin || '';
-            
+
             const footer = document.getElementById('surat-modal-footer');
             footer.innerHTML = `
                 <button type="button" class="btn btn-danger" id="reject-surat-btn">Tolak</button>
@@ -3100,7 +3249,7 @@ function initSuratPengantarPage() {
                 document.getElementById('nomor_surat').focus();
                 return;
             }
-            
+
             const response = await fetch(`${basePath}/api/surat-pengantar`, { method: 'POST', body: formData });
             const result = await response.json();
             showToast(result.message, result.status === 'success' ? 'success' : 'error');
@@ -3516,9 +3665,505 @@ function initAsetPage() {
     loadAset();
 }
 
+function initGaleriPage() {
+    const albumList = document.getElementById('album-list');
+    const isAdmin = (typeof userRole !== 'undefined' && userRole === 'admin');
+
+    if (!albumList) return;
+
+    async function loadAlbums() {
+        albumList.innerHTML = '<div class="text-center p-5"><div class="spinner-border" style="width: 3rem; height: 3rem;"></div></div>';
+        try {
+            const response = await fetch(`${basePath}/api/galeri?action=list_albums`);
+            const result = await response.json();
+            albumList.innerHTML = '';
+            if (result.status === 'success' && result.data.length > 0) {
+                result.data.forEach(album => {
+                    const tgl = new Date(album.created_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
+                    
+                    let thumbnailHtml;
+                    if (album.thumbnail) {
+                        thumbnailHtml = `<img src="${basePath}/${album.thumbnail}" class="card-img-top" alt="${album.judul}" style="height: 200px; object-fit: cover;">`;
+                    } else {
+                        thumbnailHtml = `
+                            <div class="card-img-top d-flex align-items-center justify-content-center bg-body-secondary text-secondary" style="height: 200px;">
+                                <i class="bi bi-images" style="font-size: 3rem;"></i>
+                            </div>
+                        `;
+                    }
+
+                    const adminControls = isAdmin ? `
+                        <div class="position-absolute top-0 end-0 p-2">
+                            <button class="btn btn-sm btn-light edit-album-btn" data-id="${album.id}" title="Edit Album"><i class="bi bi-pencil-fill"></i></button>
+                            <button class="btn btn-sm btn-danger delete-album-btn" data-id="${album.id}" data-judul="${album.judul}" title="Hapus Album"><i class="bi bi-trash-fill"></i></button>
+                        </div>
+                    ` : '';
+
+                    const card = `
+                        <div class="col-md-6 col-lg-4 mb-4">
+                            <div class="card h-100 shadow-sm album-card">
+                                <a href="${basePath}/galeri/album/${album.id}" class="text-decoration-none text-dark">
+                                    ${thumbnailHtml}
+                                    <div class="card-body">
+                                        <h5 class="card-title">${album.judul}</h5>
+                                        <p class="card-text text-muted small">${album.deskripsi || ''}</p>
+                                    </div>
+                                </a>
+                                <div class="card-footer bg-transparent border-0 d-flex justify-content-between align-items-center">
+                                    <small class="text-muted"><i class="bi bi-image"></i> ${album.jumlah_foto} foto</small>
+                                    <small class="text-muted">Dibuat: ${tgl}</small>
+                                </div>
+                                ${adminControls}
+                            </div>
+                        </div>`;
+                    albumList.insertAdjacentHTML('beforeend', card);
+                });
+            } else {
+                albumList.innerHTML = '<div class="col-12"><div class="alert alert-info">Belum ada album foto yang dibuat.</div></div>';
+            }
+        } catch (error) {
+            albumList.innerHTML = '<div class="col-12"><div class="alert alert-danger">Gagal memuat album.</div></div>';
+        }
+    }
+
+    if (isAdmin) {
+        const modalEl = document.getElementById('albumModal');
+        const modal = new bootstrap.Modal(modalEl);
+        const form = document.getElementById('album-form');
+        const saveBtn = document.getElementById('save-album-btn');
+        const kegiatanSelect = document.getElementById('kegiatan_id_album');
+
+        async function loadKegiatanList() {
+            try {
+                const response = await fetch(`${basePath}/api/kegiatan?action=list`);
+                const result = await response.json();
+                kegiatanSelect.innerHTML = '<option value="">-- Tidak ditautkan --</option>';
+                if (result.status === 'success') {
+                    result.data.forEach(k => kegiatanSelect.add(new Option(k.judul, k.id)));
+                }
+            } catch (e) { console.error('Gagal memuat daftar kegiatan'); }
+        }
+
+        modalEl.addEventListener('show.bs.modal', async (e) => {
+            const button = e.relatedTarget;
+            const action = button.dataset.action;
+            form.reset();
+            document.getElementById('album-action').value = action;
+            await loadKegiatanList();
+
+            if (action === 'add') {
+                document.getElementById('album-action').value = 'create_album';
+                document.getElementById('album-id').value = '';
+            } else { // edit
+                document.getElementById('albumModalLabel').textContent = 'Edit Album';
+                const id = button.dataset.id;
+                // Fetch album data to populate form (simplified for brevity)
+                // In a real app, you'd fetch the specific album's data here.
+                // For now, we just set the ID.
+                document.getElementById('album-id').value = id;
+                // You would need to fetch and set judul, deskripsi, and kegiatan_id here.
+            }
+        });
+
+        saveBtn.addEventListener('click', async () => {
+            const formData = new FormData(form);
+            const response = await fetch(`${basePath}/api/galeri`, { method: 'POST', body: formData });
+            const result = await response.json();
+            showToast(result.message, result.status === 'success' ? 'success' : 'error');
+            if (result.status === 'success') {
+                modal.hide();
+                loadAlbums();
+            }
+        });
+
+        // Listener for ADD button to open modal
+        modalEl.addEventListener('show.bs.modal', async (e) => {
+            const button = e.relatedTarget;
+            // Only proceed if it's the "add" button, edit is handled separately
+            if (!button || button.dataset.action !== 'add') return;
+
+            form.reset();
+            document.getElementById('albumModalLabel').textContent = 'Buat Album Baru';
+            document.getElementById('album-action').value = 'create_album';
+            document.getElementById('album-id').value = '';
+            await loadKegiatanList();
+        });
+
+        // Delegated listener for EDIT and DELETE buttons
+        albumList.addEventListener('click', async (e) => {
+            const editBtn = e.target.closest('.edit-album-btn');
+            if (editBtn) {
+                const id = editBtn.dataset.id;
+                
+                // Fetch album data
+                const formData = new FormData();
+                formData.append('action', 'get_single_album');
+                formData.append('id', id);
+
+                try {
+                    const response = await fetch(`${basePath}/api/galeri`, { method: 'POST', body: formData });
+                    const result = await response.json();
+
+                    if (result.status === 'success') {
+                        const album = result.data;
+                        
+                        document.getElementById('albumModalLabel').textContent = 'Edit Album';
+                        form.reset();
+                        await loadKegiatanList();
+                        
+                        document.getElementById('album-action').value = 'update_album';
+                        document.getElementById('album-id').value = album.id;
+                        document.getElementById('judul_album').value = album.judul;
+                        document.getElementById('deskripsi_album').value = album.deskripsi || '';
+                        document.getElementById('kegiatan_id_album').value = album.kegiatan_id || '';
+                        
+                        modal.show();
+                    } else { showToast(result.message, 'error'); }
+                } catch (error) { showToast('Gagal mengambil data album.', 'error'); }
+            }
+
+            const deleteBtn = e.target.closest('.delete-album-btn');
+            if (deleteBtn) {
+                const { id, judul } = deleteBtn.dataset;
+                if (confirm(`Yakin ingin menghapus album "${judul}" dan semua fotonya?`)) {
+                    const formData = new FormData();
+                    formData.append('action', 'delete_album');
+                    formData.append('id', id);
+                    const response = await fetch(`${basePath}/api/galeri`, { method: 'POST', body: formData });
+                    const result = await response.json();
+                    showToast(result.message, result.status === 'success' ? 'success' : 'error');
+                    if (result.status === 'success') loadAlbums();
+                }
+            }
+        });
+    }
+
+    loadAlbums();
+}
+
+function initGaleriAlbumPage() {
+    const container = document.getElementById('album-detail-container');
+    if (!container) return;
+
+    const albumId = container.dataset.albumId;
+    const titleEl = document.getElementById('album-title');
+    const descEl = document.getElementById('album-description');
+    const gridEl = document.getElementById('photo-grid');
+    const isAdmin = (typeof userRole !== 'undefined' && userRole === 'admin');
+    const viewPhotoModalEl = document.getElementById('viewPhotoModal');
+    const viewPhotoModal = new bootstrap.Modal(viewPhotoModalEl);
+    const commentForm = document.getElementById('comment-form');
+    const commentList = document.getElementById('comment-list');
+
+    async function loadAlbumDetail() {
+        try {
+            const response = await fetch(`${basePath}/api/galeri?action=get_album&id=${albumId}`);
+            const result = await response.json();
+            if (result.status !== 'success') throw new Error(result.message);
+
+            const { info, photos } = result.data;
+            titleEl.textContent = info.judul;
+            descEl.textContent = info.deskripsi || '';
+            document.title = `Galeri: ${info.judul}`;
+
+            gridEl.innerHTML = '';
+            if (photos.length > 0) {
+                photos.forEach(photo => {
+                    const adminControls = isAdmin ? `<button class="btn btn-sm btn-danger delete-photo-btn" data-id="${photo.id}" title="Hapus Foto"><i class="bi bi-trash"></i></button>` : '';
+                    const photoCard = `
+                        <div class="col-sm-6 col-md-4 col-lg-3">
+                            <div class="card photo-card" data-photo-id="${photo.id}" data-caption="${photo.caption || ''}" data-path="${basePath}/${photo.path_file}">
+                                <img src="${basePath}/${photo.path_file}" class="img-fluid" alt="${photo.caption || 'Foto Kegiatan'}" style="cursor: pointer;">
+                                <div class="photo-overlay">
+                                    ${adminControls}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    gridEl.insertAdjacentHTML('beforeend', photoCard);
+                });
+            } else {
+                gridEl.innerHTML = '<div class="col-12"><div class="alert alert-info">Belum ada foto di album ini.</div></div>';
+            }
+        } catch (error) {
+            gridEl.innerHTML = `<div class="col-12"><div class="alert alert-danger">Gagal memuat foto: ${error.message}</div></div>`;
+        }
+    }
+
+    // --- Event Listeners ---
+    if (isAdmin) {
+        const uploadModalEl = document.getElementById('uploadFotoModal');
+        const uploadModal = new bootstrap.Modal(uploadModalEl);
+        const saveUploadBtn = document.getElementById('save-upload-btn');
+
+        uploadModalEl.addEventListener('hidden.bs.modal', () => {
+            const form = document.getElementById('upload-foto-form');
+            if(form) form.reset();
+        });
+
+        saveUploadBtn.addEventListener('click', async () => {
+            const form = document.getElementById('upload-foto-form');
+            const formData = new FormData(form);
+            
+            const originalBtnHtml = saveUploadBtn.innerHTML;
+            saveUploadBtn.disabled = true;
+            saveUploadBtn.innerHTML = `<span class="spinner-border spinner-border-sm"></span> Mengunggah...`;
+
+            try {
+                const response = await fetch(`${basePath}/api/galeri`, { method: 'POST', body: formData });
+                const result = await response.json();
+                showToast(result.message, result.status === 'success' ? 'success' : 'error');
+                if (result.status === 'success') {
+                    uploadModal.hide();
+                    loadAlbumDetail();
+                }
+            } catch (error) {
+                showToast('Terjadi kesalahan jaringan saat mengunggah.', 'error');
+            } finally {
+                saveUploadBtn.disabled = false;
+                saveUploadBtn.innerHTML = originalBtnHtml;
+            }
+        });
+
+        gridEl.addEventListener('click', async (e) => {
+            const deleteBtn = e.target.closest('.delete-photo-btn');
+            if (deleteBtn) {
+                if (confirm('Yakin ingin menghapus foto ini?')) {
+                    const formData = new FormData();
+                    formData.append('action', 'delete_photo');
+                    formData.append('id', deleteBtn.dataset.id);
+                    const response = await fetch(`${basePath}/api/galeri`, { method: 'POST', body: formData });
+                    const result = await response.json();
+                    showToast(result.message, result.status === 'success' ? 'success' : 'error');
+                    if (result.status === 'success') loadAlbumDetail();
+                }
+            }
+        });
+    }
+
+    gridEl.addEventListener('click', async (e) => {
+        const card = e.target.closest('.photo-card');
+        // Don't open modal if delete button is clicked
+        if (card && !e.target.closest('.delete-photo-btn')) {
+            const photoId = card.dataset.photoId;
+            const photoPath = card.dataset.path;
+            const photoCaption = card.dataset.caption;
+
+            document.getElementById('view-photo-img').src = photoPath;
+            document.getElementById('view-photo-caption').textContent = photoCaption || 'Detail Foto';
+            document.getElementById('comment-foto-id').value = photoId;
+            commentList.innerHTML = '<div class="text-center p-3"><div class="spinner-border spinner-border-sm"></div></div>';
+            viewPhotoModal.show();
+
+            // Fetch comments
+            try {
+                const response = await fetch(`${basePath}/api/galeri?action=get_photo_details&id=${photoId}`);
+                const result = await response.json();
+                if (result.status === 'success') {
+                    renderComments(result.data.comments);
+                } else {
+                    commentList.innerHTML = '<div class="alert alert-warning small">Gagal memuat komentar.</div>';
+                }
+            } catch (error) {
+                commentList.innerHTML = '<div class="alert alert-danger small">Terjadi kesalahan jaringan.</div>';
+            }
+        }
+    });
+
+    function renderComments(comments) {
+        commentList.innerHTML = '';
+        if (comments.length > 0) {
+            comments.forEach(comment => appendComment(comment));
+        } else {
+            commentList.innerHTML = '<p class="text-muted text-center small mt-3">Belum ada komentar.</p>';
+        }
+    }
+
+    function appendComment(comment) {
+        const timeAgo = timeSince(new Date(comment.created_at));
+        const profilePicHtml = comment.foto_profil 
+            ? `<img src="${basePath}/${comment.foto_profil}" class="rounded-circle me-2" width="32" height="32" style="object-fit: cover;">`
+            : `<i class="bi bi-person-circle fs-4 text-secondary me-2"></i>`;
+        const deleteBtnHtml = comment.can_delete
+            ? `<button class="btn btn-sm btn-link text-danger p-0 delete-comment-btn" data-comment-id="${comment.id}" title="Hapus"><i class="bi bi-trash"></i></button>` 
+            : '';
+
+        const commentHtml = `
+            <div class="d-flex align-items-start mb-3" id="comment-${comment.id}">
+                ${profilePicHtml}
+                <div class="flex-grow-1">
+                    <div class="bg-body-secondary rounded p-2">
+                        <div class="d-flex justify-content-between">
+                            <strong class="small">${comment.nama_lengkap}</strong>
+                            ${deleteBtnHtml}
+                        </div>
+                        <p class="mb-0 small">${comment.komentar}</p>
+                    </div>
+                    <small class="text-muted ms-2">${timeAgo}</small>
+                </div>
+            </div>
+        `;
+        commentList.insertAdjacentHTML('beforeend', commentHtml);
+        commentList.scrollTop = commentList.scrollHeight;
+    }
+
+    commentForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const submitBtn = document.getElementById('submit-comment-btn');
+        const formData = new FormData(commentForm);
+        const originalBtnHtml = submitBtn.innerHTML;
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+        try {
+            const response = await fetch(`${basePath}/api/galeri`, { method: 'POST', body: formData });
+            const result = await response.json();
+            if (result.status === 'success') {
+                if (commentList.querySelector('.text-muted')) commentList.innerHTML = '';
+                appendComment(result.data);
+                commentForm.reset();
+                document.getElementById('comment-foto-id').value = formData.get('foto_id');
+                document.querySelector('#comment-form input[name="action"]').value = 'add_comment';
+            } else { showToast(result.message, 'error'); }
+        } catch (error) { showToast('Gagal mengirim komentar.', 'error'); } 
+        finally { submitBtn.disabled = false; submitBtn.innerHTML = originalBtnHtml; }
+    });
+
+    commentList.addEventListener('click', async (e) => {
+        const deleteBtn = e.target.closest('.delete-comment-btn');
+        if (deleteBtn) {
+            const commentId = deleteBtn.dataset.commentId;
+            if (confirm('Yakin ingin menghapus komentar ini?')) {
+                const formData = new FormData();
+                formData.append('action', 'delete_comment');
+                formData.append('comment_id', commentId);
+                const response = await fetch(`${basePath}/api/galeri`, { method: 'POST', body: formData });
+                const result = await response.json();
+                if (result.status === 'success') {
+                    document.getElementById(`comment-${commentId}`).remove();
+                    showToast('Komentar dihapus.', 'success');
+                } else { showToast(result.message, 'error'); }
+            }
+        }
+    });
+
+    loadAlbumDetail();
+}
+
+function initLaporanIuranPage() {
+    const tableBody = document.getElementById('tunggakan-table-body');
+    const searchInput = document.getElementById('search-tunggakan');
+    const tahunFilter = document.getElementById('filter-tahun-tunggakan');
+    const minTunggakanFilter = document.getElementById('filter-min-tunggakan');
+    const cetakBtn = document.getElementById('cetak-tunggakan-btn');
+    const exportBtn = document.getElementById('export-tunggakan-btn');
+    const totalWargaEl = document.getElementById('total-warga-menunggak');
+    const totalPotensiEl = document.getElementById('total-potensi-pemasukan');
+
+    if (!tableBody) return;
+
+    const currencyFormatter = new Intl.NumberFormat('id-ID', {
+        style: 'currency',
+        currency: 'IDR',
+        minimumFractionDigits: 0
+    });
+
+    function setupFilters() {
+        const currentYear = new Date().getFullYear();
+        for (let i = 0; i < 5; i++) {
+            const year = currentYear - i;
+            tahunFilter.add(new Option(year, year));
+        }
+    }
+
+    async function loadLaporan() {
+        const tahun = tahunFilter.value;
+        const min_tunggakan = minTunggakanFilter.value;
+        const search = searchInput.value;
+
+        tableBody.innerHTML = '<tr><td colspan="6" class="text-center p-5"><div class="spinner-border"></div></td></tr>';
+        totalWargaEl.innerHTML = '<div class="spinner-border spinner-border-sm"></div>';
+        totalPotensiEl.innerHTML = '<div class="spinner-border spinner-border-sm"></div>';
+
+        try {
+            const url = `${basePath}/api/laporan/iuran?tahun=${tahun}&min_tunggakan=${min_tunggakan}&search=${encodeURIComponent(search)}`;
+            const response = await fetch(url);
+            const result = await response.json();
+
+            if (result.status === 'success') {
+                tableBody.innerHTML = '';
+                if (result.data.length > 0) {
+                    result.data.forEach((item, index) => {
+                        const row = `
+                            <tr>
+                                <td>${index + 1}</td>
+                                <td>${item.nama_lengkap}</td>
+                                <td>${item.alamat}</td>
+                                <td>${item.jumlah_tunggakan} bulan</td>
+                                <td class="text-danger fw-bold">${currencyFormatter.format(item.total_tunggakan)}</td>
+                                <td class="text-end">
+                                    <a href="${basePath}/iuran/histori/${item.no_kk}/kk" class="btn btn-sm btn-outline-info" title="Lihat Histori">
+                                        <i class="bi bi-clock-history"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                        `;
+                        tableBody.insertAdjacentHTML('beforeend', row);
+                    });
+                } else {
+                    tableBody.innerHTML = '<tr><td colspan="6" class="text-center">Tidak ada warga yang menunggak sesuai filter.</td></tr>';
+                }
+                // Update summary
+                totalWargaEl.textContent = result.summary.total_warga;
+                totalPotensiEl.textContent = currencyFormatter.format(result.summary.total_potensi);
+            } else {
+                throw new Error(result.message);
+            }
+        } catch (error) {
+            tableBody.innerHTML = `<tr><td colspan="6" class="text-center text-danger">Gagal memuat laporan: ${error.message}</td></tr>`;
+            totalWargaEl.textContent = 'Error';
+            totalPotensiEl.textContent = 'Error';
+        }
+    }
+
+    function updateActionButtons() {
+        const tahun = tahunFilter.value;
+        const min_tunggakan = minTunggakanFilter.value;
+        const search = searchInput.value;
+        
+        cetakBtn.onclick = () => {
+            const url = `${basePath}/laporan/iuran/cetak?tahun=${tahun}&min_tunggakan=${min_tunggakan}&search=${encodeURIComponent(search)}`;
+            window.open(url, '_blank');
+        };
+
+        exportBtn.onclick = () => {
+            const url = `${basePath}/api/laporan/iuran/export?tahun=${tahun}&min_tunggakan=${min_tunggakan}&search=${encodeURIComponent(search)}`;
+            window.location.href = url;
+        };
+    }
+
+    let debounceTimer;
+    const combinedFilterHandler = () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+            loadLaporan();
+            updateActionButtons();
+        }, 300);
+    };
+
+    searchInput.addEventListener('input', combinedFilterHandler);
+    tahunFilter.addEventListener('change', combinedFilterHandler);
+    minTunggakanFilter.addEventListener('change', combinedFilterHandler);
+
+    setupFilters();
+    loadLaporan();
+    updateActionButtons();
+}
+
 function initLogAktivitasPage() {
     const tableBody = document.getElementById('log-table-body');
     const searchInput = document.getElementById('search-log');
+    const limitSelect = document.getElementById('log-limit');
     const paginationContainer = document.getElementById('log-pagination');
     const clearOldLogsBtn = document.getElementById('clear-old-logs-btn');
     const logDetailModalEl = document.getElementById('logDetailModal');
@@ -3536,10 +4181,14 @@ function initLogAktivitasPage() {
 
     let currentPage = 1;
 
-    async function loadLogs(searchTerm = '', page = 1) {
+    async function loadLogs(searchTerm = '', page = 1, perPage = '15') {
         tableBody.innerHTML = '<tr><td colspan="5" class="text-center p-5"><div class="spinner-border"></div></td></tr>';
         try {
-            const response = await fetch(`${basePath}/api/log?search=${encodeURIComponent(searchTerm)}&page=${page}`);
+            let apiUrl = `${basePath}/api/log?search=${encodeURIComponent(searchTerm)}&page=${page}`;
+            if (perPage !== 'all') {
+                apiUrl += `&limit=${perPage}`;
+            }
+            const response = await fetch(apiUrl);
             const result = await response.json();
             tableBody.innerHTML = '';
             if (result.status === 'success' && result.data.length > 0) {
@@ -3560,81 +4209,24 @@ function initLogAktivitasPage() {
             } else {
                 tableBody.innerHTML = '<tr><td colspan="5" class="text-center">Tidak ada data log ditemukan.</td></tr>';
             }
-            renderLogPagination(result.pagination);
+            renderPagination(paginationContainer, result.pagination, (newPage) => {
+                loadLogs(searchInput.value, newPage, limitSelect.value);
+            });
             currentPage = page;
         } catch (error) {
             tableBody.innerHTML = `<tr><td colspan="5" class="text-center text-danger">Gagal memuat data log.</td></tr>`;
-            renderLogPagination(null);
+            renderPagination(paginationContainer, null);
         }
-    }
-
-    function renderLogPagination(pagination) {
-        if (!paginationContainer) return;
-        paginationContainer.innerHTML = '';
-        if (!pagination || pagination.total_pages <= 1) return;
-
-        const { current_page, total_pages } = pagination;
-
-        const prevDisabled = current_page === 1 ? 'disabled' : '';
-        paginationContainer.insertAdjacentHTML('beforeend', `<li class="page-item ${prevDisabled}"><a class="page-link" href="#" data-page="${current_page - 1}">Previous</a></li>`);
-
-        const maxPagesToShow = 5;
-        let startPage, endPage;
-        if (total_pages <= maxPagesToShow) {
-            startPage = 1;
-            endPage = total_pages;
-        } else {
-            const maxPagesBeforeCurrent = Math.floor(maxPagesToShow / 2);
-            const maxPagesAfterCurrent = Math.ceil(maxPagesToShow / 2) - 1;
-            if (current_page <= maxPagesBeforeCurrent) {
-                startPage = 1;
-                endPage = maxPagesToShow;
-            } else if (current_page + maxPagesAfterCurrent >= total_pages) {
-                startPage = total_pages - maxPagesToShow + 1;
-                endPage = total_pages;
-            } else {
-                startPage = current_page - maxPagesBeforeCurrent;
-                endPage = current_page + maxPagesAfterCurrent;
-            }
-        }
-
-        if (startPage > 1) {
-            paginationContainer.insertAdjacentHTML('beforeend', `<li class="page-item"><a class="page-link" href="#" data-page="1">1</a></li>`);
-            if (startPage > 2) {
-                paginationContainer.insertAdjacentHTML('beforeend', `<li class="page-item disabled"><span class="page-link">...</span></li>`);
-            }
-        }
-
-        for (let i = startPage; i <= endPage; i++) {
-            const activeClass = i === current_page ? 'active' : '';
-            paginationContainer.insertAdjacentHTML('beforeend', `<li class="page-item ${activeClass}"><a class="page-link" href="#" data-page="${i}">${i}</a></li>`);
-        }
-
-        if (endPage < total_pages) {
-            if (endPage < total_pages - 1) {
-                paginationContainer.insertAdjacentHTML('beforeend', `<li class="page-item disabled"><span class="page-link">...</span></li>`);
-            }
-            paginationContainer.insertAdjacentHTML('beforeend', `<li class="page-item"><a class="page-link" href="#" data-page="${total_pages}">${total_pages}</a></li>`);
-        }
-
-        const nextDisabled = current_page === total_pages ? 'disabled' : '';
-        paginationContainer.insertAdjacentHTML('beforeend', `<li class="page-item ${nextDisabled}"><a class="page-link" href="#" data-page="${current_page + 1}">Next</a></li>`);
     }
 
     let debounceTimer;
     searchInput.addEventListener('input', () => {
         clearTimeout(debounceTimer);
-        currentPage = 1;
-        debounceTimer = setTimeout(() => loadLogs(searchInput.value, currentPage), 300);
+        debounceTimer = setTimeout(() => loadLogs(searchInput.value, 1, limitSelect.value), 300);
     });
 
-    paginationContainer.addEventListener('click', (e) => {
-        e.preventDefault();
-        const pageLink = e.target.closest('.page-link');
-        if (pageLink && !pageLink.parentElement.classList.contains('disabled')) {
-            const page = parseInt(pageLink.dataset.page, 10);
-            if (page !== currentPage) loadLogs(searchInput.value, page);
-        }
+    limitSelect.addEventListener('change', () => {
+        loadLogs(searchInput.value, 1, limitSelect.value);
     });
 
     tableBody.addEventListener('click', (e) => {
@@ -3673,7 +4265,7 @@ function initLogAktivitasPage() {
                     showToast(result.message, result.status === 'success' ? 'success' : 'error');
                     
                     if (result.status === 'success') {
-                        loadLogs(searchInput.value, 1); // Reload logs from the first page
+                        loadLogs(searchInput.value, 1, limitSelect.value); // Reload logs from the first page
                     }
                 } catch (error) {
                     showToast('Terjadi kesalahan jaringan.', 'error');
@@ -3685,7 +4277,7 @@ function initLogAktivitasPage() {
         });
     }
 
-    loadLogs();
+    loadLogs(searchInput.value, 1, limitSelect.value);
 }
 
 function initPanicLogPage() {
@@ -4553,10 +5145,6 @@ function initNotificationPolling() {
     let lastKnownUnreadCount = -1; // Use -1 to indicate it's not yet initialized
 
     const poll = async () => {
-        // Only poll if the user is an admin or bendahara, as they are the only ones receiving notifications for now.
-        if (!['admin', 'bendahara'].includes(userRole)) {
-            return;
-        }
         try {
             const response = await fetch(`${basePath}/api/notifications?action=list`);
             if (!response.ok) return; // Don't show error for failed polls
@@ -4832,3 +5420,70 @@ document.addEventListener('DOMContentLoaded', function () {
     updateActiveSidebarLink(window.location.pathname);
     runPageScripts(window.location.pathname);
 });
+
+/**
+ * Renders pagination controls.
+ * @param {HTMLElement} container The container element for the pagination.
+ * @param {object|null} pagination The pagination object from the API.
+ * @param {function} onPageClick The callback function to execute when a page link is clicked.
+ */
+function renderPagination(container, pagination, onPageClick) {
+    if (!container) return;
+    container.innerHTML = '';
+    if (!pagination || pagination.total_pages <= 1) return;
+
+    const { current_page, total_pages } = pagination;
+
+    const createPageItem = (page, text, isDisabled = false, isActive = false) => {
+        const li = document.createElement('li');
+        li.className = `page-item ${isDisabled ? 'disabled' : ''} ${isActive ? 'active' : ''}`;
+        const a = document.createElement('a');
+        a.className = 'page-link';
+        a.href = '#';
+        a.dataset.page = page;
+        a.innerHTML = text;
+        li.appendChild(a);
+        return li;
+    };
+
+    container.appendChild(createPageItem(current_page - 1, 'Previous', current_page === 1));
+
+    const maxPagesToShow = 5;
+    let startPage, endPage;
+    if (total_pages <= maxPagesToShow) {
+        startPage = 1; endPage = total_pages;
+    } else {
+        const maxPagesBeforeCurrent = Math.floor(maxPagesToShow / 2);
+        const maxPagesAfterCurrent = Math.ceil(maxPagesToShow / 2) - 1;
+        if (current_page <= maxPagesBeforeCurrent) { startPage = 1; endPage = maxPagesToShow; } 
+        else if (current_page + maxPagesAfterCurrent >= total_pages) { startPage = total_pages - maxPagesToShow + 1; endPage = total_pages; } 
+        else { startPage = current_page - maxPagesBeforeCurrent; endPage = current_page + maxPagesAfterCurrent; }
+    }
+
+    if (startPage > 1) {
+        container.appendChild(createPageItem(1, '1'));
+        if (startPage > 2) container.appendChild(createPageItem(0, '...', true));
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+        container.appendChild(createPageItem(i, i, false, i === current_page));
+    }
+
+    if (endPage < total_pages) {
+        if (endPage < total_pages - 1) container.appendChild(createPageItem(0, '...', true));
+        container.appendChild(createPageItem(total_pages, total_pages));
+    }
+
+    container.appendChild(createPageItem(current_page + 1, 'Next', current_page === total_pages));
+
+    container.addEventListener('click', (e) => {
+        e.preventDefault();
+        const pageLink = e.target.closest('.page-link');
+        if (pageLink && !pageLink.parentElement.classList.contains('disabled')) {
+            const page = parseInt(pageLink.dataset.page, 10);
+            if (page !== current_page) {
+                onPageClick(page);
+            }
+        }
+    });
+}

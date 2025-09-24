@@ -144,6 +144,22 @@ try {
                 $stmt = $conn->prepare("UPDATE laporan_warga SET status = ? WHERE id = ?");
                 $stmt->bind_param("si", $status, $id);
                 $stmt->execute();
+                $stmt->close();
+
+                // --- Kirim Notifikasi ke Warga ---
+                $stmt_get_warga = $conn->prepare("SELECT warga_pelapor_id, kategori FROM laporan_warga WHERE id = ?");
+                $stmt_get_warga->bind_param("i", $id);
+                $stmt_get_warga->execute();
+                $laporan_info = $stmt_get_warga->get_result()->fetch_assoc();
+                $stmt_get_warga->close();
+
+                if ($laporan_info) {
+                    $status_text = ucfirst($status);
+                    $message = "Laporan Anda ('{$laporan_info['kategori']}') telah diperbarui menjadi status '{$status_text}'.";
+                    send_notification_to_warga($laporan_info['warga_pelapor_id'], 'laporan_status', $message, '/laporan');
+                }
+                // --- Akhir Notifikasi ---
+
                 log_activity($_SESSION['username'], 'Update Status Laporan', "Mengubah status laporan ID: {$id} menjadi {$status}");
                 echo json_encode(['status' => 'success', 'message' => 'Status laporan berhasil diperbarui.']);
                 break;

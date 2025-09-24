@@ -112,6 +112,47 @@ try {
                 $stmt->close();
                 echo json_encode(['status' => 'success', 'data' => $history]);
                 break;
+
+            case 'get_detail':
+                $rumah_id = $_GET['id'] ?? 0;
+                if (empty($rumah_id)) {
+                    throw new Exception("ID Rumah tidak boleh kosong.");
+                }
+
+                $response_data = [];
+
+                // 1. Get house info and current occupant
+                $stmt_rumah = $conn->prepare("
+                    SELECT r.*, w.nama_lengkap as kepala_keluarga, w.status_tinggal
+                    FROM rumah r
+                    LEFT JOIN warga w ON r.no_kk_penghuni = w.no_kk AND w.status_dalam_keluarga = 'Kepala Keluarga'
+                    WHERE r.id = ?
+                ");
+                $stmt_rumah->bind_param("i", $rumah_id);
+                $stmt_rumah->execute();
+                $response_data['info'] = $stmt_rumah->get_result()->fetch_assoc();
+                $stmt_rumah->close();
+
+                // 2. Get current family members if occupied
+                if ($response_data['info'] && $response_data['info']['no_kk_penghuni']) {
+                    $stmt_anggota = $conn->prepare("SELECT nama_lengkap, status_dalam_keluarga FROM warga WHERE no_kk = ? ORDER BY FIELD(status_dalam_keluarga, 'Kepala Keluarga', 'Istri', 'Anak', 'Lainnya'), tgl_lahir ASC");
+                    $stmt_anggota->bind_param("s", $response_data['info']['no_kk_penghuni']);
+                    $stmt_anggota->execute();
+                    $response_data['anggota'] = $stmt_anggota->get_result()->fetch_all(MYSQLI_ASSOC);
+                    $stmt_anggota->close();
+                } else {
+                    $response_data['anggota'] = [];
+                }
+
+                // 3. Get occupant history (re-use existing logic)
+                $stmt_history = $conn->prepare("SELECT h.id, h.tanggal_masuk, h.tanggal_keluar, w.nama_lengkap as kepala_keluarga FROM rumah_penghuni_history h LEFT JOIN warga w ON h.no_kk_penghuni = w.no_kk AND w.status_dalam_keluarga = 'Kepala Keluarga' WHERE h.rumah_id = ? ORDER BY h.tanggal_masuk DESC");
+                $stmt_history->bind_param("i", $rumah_id);
+                $stmt_history->execute();
+                $response_data['histori'] = $stmt_history->get_result()->fetch_all(MYSQLI_ASSOC);
+                $stmt_history->close();
+
+                echo json_encode(['status' => 'success', 'data' => $response_data]);
+                break;
         }
     } elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Hanya admin yang bisa melakukan CUD

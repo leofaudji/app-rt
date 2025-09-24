@@ -26,34 +26,60 @@ try {
         // --- GET: Mengambil daftar transaksi kas ---
         $search = $_GET['search'] ?? '';
         $jenis = $_GET['jenis'] ?? '';
+        $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+        $limit_str = $_GET['limit'] ?? '10';
+        $use_limit = $limit_str !== 'all';
+        $limit = (int)$limit_str;
+        $offset = ($page - 1) * $limit;
 
         $params = [];
         $types = '';
 
-        $query = "SELECT k.*, u.nama_lengkap as pencatat FROM kas k JOIN users u ON k.dicatat_oleh = u.id WHERE 1=1";
+        $base_query = "FROM kas k JOIN users u ON k.dicatat_oleh = u.id WHERE 1=1";
+        $count_query = "SELECT COUNT(k.id) as total " . $base_query;
+        $data_query = "SELECT k.*, u.nama_lengkap as pencatat " . $base_query;
         
         if (!empty($search)) {
-            $query .= " AND k.keterangan LIKE ?";
+            $data_query .= " AND k.keterangan LIKE ?";
+            $count_query .= " AND k.keterangan LIKE ?";
             $params[] = "%{$search}%";
             $types .= 's';
         }
         if (!empty($jenis)) {
-            $query .= " AND k.jenis = ?";
+            $data_query .= " AND k.jenis = ?";
+            $count_query .= " AND k.jenis = ?";
             $params[] = $jenis;
             $types .= 's';
         }
-        $query .= " ORDER BY k.tanggal DESC, k.created_at DESC";
 
-        $stmt = $conn->prepare($query);
+        // Get total records for pagination
+        $stmt_count = $conn->prepare($count_query);
         if (!empty($params)) {
-            $stmt->bind_param($types, ...$params);
+            $stmt_count->bind_param($types, ...$params);
         }
-        $stmt->execute();
-        $result = $stmt->get_result();
-        $kas = $result->fetch_all(MYSQLI_ASSOC);
-        $stmt->close();
+        $stmt_count->execute();
+        $total_records = $stmt_count->get_result()->fetch_assoc()['total'];
+        $stmt_count->close();
 
-        echo json_encode(['status' => 'success', 'data' => $kas]);
+        $data_query .= " ORDER BY k.tanggal DESC, k.created_at DESC";
+        if ($use_limit) {
+            $data_query .= " LIMIT ? OFFSET ?";
+            $params[] = $limit;
+            $params[] = $offset;
+            $types .= 'ii';
+        }
+
+        $stmt_data = $conn->prepare($data_query);
+        if (!empty($params)) {
+            $stmt_data->bind_param($types, ...$params);
+        }
+        $stmt_data->execute();
+        $kas = $stmt_data->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt_data->close();
+
+        $total_pages = $use_limit ? ceil($total_records / $limit) : 1;
+
+        echo json_encode(['status' => 'success', 'data' => $kas, 'pagination' => ['total_records' => (int)$total_records, 'total_pages' => (int)$total_pages, 'current_page' => $page, 'limit' => $limit]]);
 
     } elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // --- POST: Aksi untuk CUD (Create, Update, Delete) ---

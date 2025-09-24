@@ -27,4 +27,4 @@ try {
     Config::load(PROJECT_ROOT . '/.env');
 } catch (\Exception $e) {
     die('Error: Could not load configuration. Make sure a .env file exists in the root directory. Details: ' . $e->getMessage());
-} 
+}

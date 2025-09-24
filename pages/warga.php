@@ -10,7 +10,7 @@ if (!$is_spa_request) {
     <div class="btn-toolbar mb-2 mb-md-0">
         <div class="input-group me-2">
             <span class="input-group-text"><i class="bi bi-search"></i></span>
-            <input type="text" class="form-control" id="search-warga" placeholder="Cari warga...">
+            <input type="text" class="form-control" id="search-warga" placeholder="Cari nama, NIK, alamat...">
         </div>
         <div class="btn-group me-2">
             <button type="button" class="btn btn-sm btn-outline-info" data-bs-toggle="modal" data-bs-target="#importWargaModal">
@@ -25,13 +25,27 @@ if (!$is_spa_request) {
     </div>
 </div>
 
+<div class="row mb-3">
+    <div class="col-auto ms-auto">
+        <label for="warga-limit" class="col-form-label">Tampilkan:</label>
+    </div>
+    <div class="col-auto">
+        <select id="warga-limit" class="form-select form-select-sm">
+            <option value="10" selected>10</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+            <option value="all">Semua</option>
+        </select>
+    </div>
+</div>
+
 <div class="table-responsive">
     <table class="table table-striped table-hover">
         <thead>
             <tr>
                 <th>#</th>
                 <th>Foto</th>
-                <th class="sortable" data-sort="nama_lengkap">Nama Lengkap</th>
+                <th class="sortable asc" data-sort="nama_lengkap">Nama Lengkap</th>
                 <th class="sortable" data-sort="nik">NIK</th>
                 <th class="sortable" data-sort="alamat">Alamat</th>
                 <th>No. Telepon</th>

@@ -32,6 +32,17 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
                     <input type="text" id="search-log" class="form-control" placeholder="Cari username atau aksi...">
                 </div>
             </div>
+            <div class="col-auto ms-md-auto">
+                <label for="log-limit" class="col-form-label">Tampilkan:</label>
+            </div>
+            <div class="col-auto">
+                <select id="log-limit" class="form-select">
+                    <option value="15" selected>15</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                    <option value="all">Semua</option>
+                </select>
+            </div>
         </div>
     </div>
 </div>

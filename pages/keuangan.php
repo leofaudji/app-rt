@@ -27,11 +27,22 @@ if (!$is_spa_request) {
                     <input type="text" id="search-kas" class="form-control" placeholder="Cari keterangan...">
                 </div>
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <select id="filter-jenis-kas" class="form-select">
                     <option value="">Semua Jenis</option>
                     <option value="masuk">Pemasukan</option>
                     <option value="keluar">Pengeluaran</option>
+                </select>
+            </div>
+            <div class="col-auto ms-md-auto">
+                <label for="kas-limit" class="col-form-label">Tampilkan:</label>
+            </div>
+            <div class="col-auto">
+                <select id="kas-limit" class="form-select">
+                    <option value="10" selected>10</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                    <option value="all">Semua</option>
                 </select>
             </div>
         </div>
@@ -58,6 +69,13 @@ if (!$is_spa_request) {
         </tbody>
     </table>
 </div>
+
+<!-- Pagination -->
+<nav aria-label="Page navigation">
+    <ul class="pagination justify-content-center" id="kas-pagination">
+        <!-- Pagination controls will be inserted here by JavaScript -->
+    </ul>
+</nav>
 
 <!-- Modal untuk Tambah/Edit Kas -->
 <div class="modal fade" id="kasModal" tabindex="-1" aria-labelledby="kasModalLabel" aria-hidden="true">

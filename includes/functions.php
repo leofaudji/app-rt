@@ -147,3 +147,58 @@ function render_template($template_string, $context) {
         return is_string($value) || is_numeric($value) ? htmlspecialchars($value) : '(data kompleks)';
     }, $template_string);
 }
+
+/**
+ * Mengirim notifikasi ke pengguna tertentu.
+ *
+ * @param int $user_id ID pengguna yang akan menerima notifikasi.
+ * @param string $type Tipe notifikasi (misal: 'surat_status').
+ * @param string $message Isi pesan notifikasi.
+ * @param string|null $link Link yang akan dibuka saat notifikasi diklik.
+ * @return bool True jika berhasil, false jika gagal.
+ */
+function send_notification(int $user_id, string $type, string $message, ?string $link = null): bool {
+    $conn = Database::getInstance()->getConnection();
+    $stmt = $conn->prepare("INSERT INTO notifications (user_id, type, message, link) VALUES (?, ?, ?, ?)");
+    if (!$stmt) return false;
+    $stmt->bind_param("isss", $user_id, $type, $message, $link);
+    $success = $stmt->execute();
+    $stmt->close();
+    return $success;
+}
+
+/**
+ * Mendapatkan user_id dari nama_panggilan (username) warga.
+ *
+ * @param int $warga_id ID warga yang akan menerima notifikasi.
+ * @param string $type Tipe notifikasi (misal: 'surat_status').
+ * @param string $message Isi pesan notifikasi.
+ * @param string|null $link Link yang akan dibuka saat notifikasi diklik.
+ * @return bool True jika berhasil, false jika gagal.
+ */
+function send_notification_to_warga(int $warga_id, string $type, string $message, ?string $link = null): bool {
+    $conn = Database::getInstance()->getConnection();
+    $stmt = $conn->prepare("INSERT INTO notifications (warga_id, type, message, link) VALUES (?, ?, ?, ?)");
+    if (!$stmt) return false;
+    $stmt->bind_param("isss", $warga_id, $type, $message, $link);
+    $success = $stmt->execute();
+    $stmt->close();
+    return $success;
+}
+
+/**
+ * Mendapatkan user_id dari nama_panggilan (username) warga.
+ *
+ * @param string $nama_panggilan Username warga.
+ * @return int|null ID pengguna jika ditemukan, null jika tidak.
+ */
+function get_user_id_from_username(string $nama_panggilan): ?int {
+    $conn = Database::getInstance()->getConnection();
+    $stmt = $conn->prepare("SELECT id FROM users WHERE username = ?");
+    if (!$stmt) return null;
+    $stmt->bind_param("s", $nama_panggilan);
+    $stmt->execute();
+    $result = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    return $result ? (int)$result['id'] : null;
+}

@@ -11,6 +11,10 @@ if (!isset($_SESSION['loggedin']) || $_SESSION['loggedin'] !== true) {
 $conn = Database::getInstance()->getConnection();
 $data = [];
 
+// Get filter parameters or default to current month/year
+$filter_bulan = $_GET['bulan'] ?? date('m');
+$filter_tahun = $_GET['tahun'] ?? date('Y');
+
 try {
     // Total Warga
     $result = $conn->query("SELECT COUNT(id) as total FROM warga");
@@ -58,9 +62,8 @@ try {
     ];
 
     // --- Warga Ulang Tahun Bulan Ini ---
-    $current_month = date('m');
     $stmt_ultah = $conn->prepare("SELECT nama_lengkap, tgl_lahir FROM warga WHERE MONTH(tgl_lahir) = ? ORDER BY DAY(tgl_lahir) ASC");
-    $stmt_ultah->bind_param("s", $current_month);
+    $stmt_ultah->bind_param("s", $filter_bulan);
     $stmt_ultah->execute();
     $data['ulang_tahun_bulan_ini'] = $stmt_ultah->get_result()->fetch_all(MYSQLI_ASSOC);
     $stmt_ultah->close();
@@ -70,7 +73,7 @@ try {
     $data['pengumuman_terbaru'] = $stmt_pengumuman->fetch_all(MYSQLI_ASSOC);
 
     // --- 3 Kegiatan Akan Datang ---
-    $stmt_kegiatan = $conn->query("SELECT id, judul, tanggal_kegiatan FROM kegiatan WHERE tanggal_kegiatan >= CURDATE() ORDER BY tanggal_kegiatan ASC LIMIT 3");
+    $stmt_kegiatan = $conn->query("SELECT id, judul, tanggal_kegiatan FROM kegiatan WHERE tanggal_kegiatan >= NOW() ORDER BY tanggal_kegiatan ASC LIMIT 3");
     $data['kegiatan_akan_datang'] = $stmt_kegiatan->fetch_all(MYSQLI_ASSOC);
 
     // --- Demografi Warga ---
@@ -89,8 +92,6 @@ try {
     ];
 
     // --- Pemasukan vs Pengeluaran Bulan Ini ---
-    $current_year = date('Y');
-    $current_month = date('m');
     $stmt_kas_bulanan = $conn->prepare("
         SELECT 
             SUM(CASE WHEN jenis = 'masuk' THEN jumlah ELSE 0 END) as total_pemasukan,
@@ -98,7 +99,7 @@ try {
         FROM kas 
         WHERE YEAR(tanggal) = ? AND MONTH(tanggal) = ?
     ");
-    $stmt_kas_bulanan->bind_param("ii", $current_year, $current_month);
+    $stmt_kas_bulanan->bind_param("ii", $filter_tahun, $filter_bulan);
     $stmt_kas_bulanan->execute();
     $kas_bulanan = $stmt_kas_bulanan->get_result()->fetch_assoc();
     $stmt_kas_bulanan->close();
@@ -110,14 +111,11 @@ try {
 
     // --- Iuran Summary This Month ---
     if (in_array($_SESSION['role'], ['admin', 'bendahara'])) {
-        $current_year_iuran = date('Y');
-        $current_month_iuran = date('m');
-
         $total_kk_result = $conn->query("SELECT COUNT(id) as total FROM rumah WHERE no_kk_penghuni IS NOT NULL AND no_kk_penghuni != ''");
         $total_kk = (int)($total_kk_result->fetch_assoc()['total'] ?? 0);
 
         $stmt_iuran = $conn->prepare("SELECT COUNT(id) as total FROM iuran WHERE periode_tahun = ? AND periode_bulan = ?");
-        $stmt_iuran->bind_param("ii", $current_year_iuran, $current_month_iuran);
+        $stmt_iuran->bind_param("ii", $filter_tahun, $filter_bulan);
         $stmt_iuran->execute();
         $kk_lunas = (int)($stmt_iuran->get_result()->fetch_assoc()['total'] ?? 0);
         $stmt_iuran->close();
@@ -166,10 +164,11 @@ try {
 
     // --- New Residents Widget ---
     $stmt_warga_baru = $conn->query("
-        SELECT w.id, w.nama_lengkap, w.foto_profil, r.blok, r.nomor 
+        SELECT w.id, w.nama_lengkap, w.foto_profil, r.blok, r.nomor, w.created_at
         FROM warga w
         LEFT JOIN rumah r ON w.no_kk = r.no_kk_penghuni
-        WHERE w.created_at >= DATE_SUB(NOW(), INTERVAL 3 MONTH)
+        WHERE w.status_dalam_keluarga = 'Kepala Keluarga'
+        AND w.created_at >= DATE_SUB(NOW(), INTERVAL 3 MONTH)
         ORDER BY w.created_at DESC 
         LIMIT 5
     ");
@@ -184,6 +183,27 @@ try {
             LIMIT 5
         ");
         $data['log_keuangan_terbaru'] = $stmt_log_kas->fetch_all(MYSQLI_ASSOC);
+    }
+
+    // --- Warga Menunggak Iuran (> 2 bulan di tahun berjalan) ---
+    if (in_array($_SESSION['role'], ['admin', 'bendahara'])) {
+        // Bulan yang sudah seharusnya dibayar (tidak termasuk bulan yang difilter)
+        $months_due = $filter_bulan - 1;
+
+        $query_tunggakan = "
+            SELECT 
+                w.no_kk, w.nama_lengkap,
+                (GREATEST(0, ? - (SELECT COUNT(i.id) FROM iuran i WHERE i.no_kk = w.no_kk AND i.periode_tahun = ? AND i.periode_bulan < ?))) as jumlah_tunggakan
+            FROM warga w
+            WHERE w.status_dalam_keluarga = 'Kepala Keluarga'
+            HAVING jumlah_tunggakan >= 2
+            ORDER BY jumlah_tunggakan DESC, w.nama_lengkap ASC
+        ";
+        $stmt_tunggakan = $conn->prepare($query_tunggakan);
+        $stmt_tunggakan->bind_param("iii", $months_due, $filter_tahun, $filter_bulan);
+        $stmt_tunggakan->execute();
+        $data['iuran_menunggak'] = $stmt_tunggakan->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt_tunggakan->close();
     }
 
     echo json_encode(['status' => 'success', 'data' => $data]);

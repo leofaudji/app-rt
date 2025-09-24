@@ -15,7 +15,9 @@ try {
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $searchTerm = $_GET['search'] ?? '';
         $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
-        $limit = 15; // Jumlah log per halaman
+        $limit_str = $_GET['limit'] ?? '15';
+        $use_limit = $limit_str !== 'all';
+        $limit = (int)$limit_str;
         $offset = ($page - 1) * $limit;
 
         $params = [];
@@ -43,10 +45,13 @@ try {
         $stmtCount->close();
 
         // Get data per page
-        $dataQuery .= " ORDER BY timestamp DESC LIMIT ? OFFSET ?";
-        $params[] = $limit;
-        $params[] = $offset;
-        $types .= 'ii';
+        $dataQuery .= " ORDER BY timestamp DESC";
+        if ($use_limit) {
+            $dataQuery .= " LIMIT ? OFFSET ?";
+            $params[] = $limit;
+            $params[] = $offset;
+            $types .= 'ii';
+        }
 
         $stmt = $conn->prepare($dataQuery);
         if (!empty($params)) {
@@ -55,6 +60,8 @@ try {
         $stmt->execute();
         $result = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
         $stmt->close();
+
+        $totalPages = $use_limit ? ceil($totalRecords / $limit) : 1;
 
         echo json_encode([
             'status' => 'success', 

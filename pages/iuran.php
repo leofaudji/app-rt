@@ -77,6 +77,17 @@ if (!$is_spa_request) {
                     <option value="belum_lunas">Belum Lunas</option>
                 </select>
             </div>
+            <div class="col-auto ms-md-auto">
+                <label for="iuran-limit" class="col-form-label">Tampilkan:</label>
+            </div>
+            <div class="col-auto">
+                <select id="iuran-limit" class="form-select">
+                    <option value="10" selected>10</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                    <option value="all">Semua</option>
+                </select>
+            </div>
         </div>
     </div>
 </div>
@@ -99,6 +110,13 @@ if (!$is_spa_request) {
         </tbody>
     </table>
 </div>
+
+<!-- Pagination -->
+<nav aria-label="Page navigation">
+    <ul class="pagination justify-content-center" id="iuran-pagination">
+        <!-- Pagination controls will be inserted here by JavaScript -->
+    </ul>
+</nav>
 
 <!-- Modal untuk Konfirmasi Pembayaran -->
 <div class="modal fade" id="bayarModal" tabindex="-1" aria-labelledby="bayarModalLabel" aria-hidden="true">

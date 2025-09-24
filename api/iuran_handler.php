@@ -19,6 +19,11 @@ try {
         $bulan = $_GET['bulan'] ?? 0;
         $status = $_GET['status'] ?? 'semua';
         $search = $_GET['search'] ?? '';
+        $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+        $limit_str = $_GET['limit'] ?? '10';
+        $use_limit = $limit_str !== 'all';
+        $limit = (int)$limit_str;
+        $offset = ($page - 1) * $limit;
 
         if (empty($tahun) || empty($bulan)) {
             throw new Exception("Periode tahun dan bulan wajib diisi.");
@@ -27,7 +32,7 @@ try {
         $params = [];
         $types = '';
 
-        $query = "
+        $base_query = "
             SELECT 
                 r.no_kk_penghuni as no_kk,
                 CONCAT(r.blok, ' / ', r.nomor) as alamat,
@@ -38,30 +43,53 @@ try {
             LEFT JOIN iuran i ON r.no_kk_penghuni = i.no_kk AND i.periode_tahun = ? AND i.periode_bulan = ?
             WHERE r.no_kk_penghuni IS NOT NULL AND r.no_kk_penghuni != ''
         ";
+        $count_query = "SELECT COUNT(r.id) as total FROM rumah r LEFT JOIN warga w ON r.no_kk_penghuni = w.no_kk AND w.status_dalam_keluarga = 'Kepala Keluarga' WHERE r.no_kk_penghuni IS NOT NULL AND r.no_kk_penghuni != ''";
+        $data_query = $base_query;
+
         $params = [$tahun, $bulan];
         $types = 'ii';
         
         if (!empty($search)) {
-            $query .= " AND w.nama_lengkap LIKE ?";
+            $data_query .= " AND w.nama_lengkap LIKE ?";
+            $count_query .= " AND w.nama_lengkap LIKE ?";
             $params[] = "%{$search}%";
             $types .= 's';
         }
 
+        $having_clause = '';
         if ($status === 'lunas') {
-            $query .= " HAVING iuran_id IS NOT NULL";
+            $having_clause = " HAVING iuran_id IS NOT NULL";
         } elseif ($status === 'belum_lunas') {
-            $query .= " HAVING iuran_id IS NULL";
+            $having_clause = " HAVING iuran_id IS NULL";
+        }
+        $data_query .= $having_clause;
+
+        // Get total records for pagination (this is tricky with HAVING, so we count differently)
+        $stmt_total = $conn->prepare($base_query . $having_clause);
+        $stmt_total->bind_param($types, ...$params);
+        $stmt_total->execute();
+        $total_records = $stmt_total->get_result()->num_rows;
+        $stmt_total->close();
+
+        $data_query .= " ORDER BY r.blok, r.nomor";
+        if ($use_limit) {
+            $data_query .= " LIMIT ? OFFSET ?";
+            $params[] = $limit;
+            $params[] = $offset;
+            $types .= 'ii';
         }
 
-        $query .= " ORDER BY r.blok, r.nomor";
-
-        $stmt = $conn->prepare($query);
+        $stmt = $conn->prepare($data_query);
         $stmt->bind_param($types, ...$params);
         $stmt->execute();
         $result = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
         $stmt->close();
 
-        echo json_encode(['status' => 'success', 'data' => $result]);
+        $total_pages = $use_limit ? ceil($total_records / $limit) : 1;
+
+        echo json_encode(['status' => 'success', 'data' => $result, 'pagination' => [
+            'total_records' => (int)$total_records, 'total_pages' => (int)$total_pages, 'current_page' => $page, 'limit' => $limit
+        ]]);
 
     } elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'bayar') {
         $no_kk = $_POST['no_kk'] ?? '';

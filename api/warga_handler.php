@@ -20,7 +20,9 @@ try {
                 $sortBy = $_GET['sort_by'] ?? 'nama_lengkap';
                 $sortDir = $_GET['sort_dir'] ?? 'asc';
                 $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
-                $limit = 10; // Jumlah data per halaman
+                $limit_str = $_GET['limit'] ?? '10';
+                $use_limit = $limit_str !== 'all';
+                $limit = (int)$limit_str;
                 $offset = ($page - 1) * $limit;
 
                 // Whitelist for sortable columns to prevent SQL injection
@@ -57,10 +59,13 @@ try {
                 $stmtCount->close();
 
                 // Dapatkan data per halaman
-                $dataQuery .= " ORDER BY {$sortBy} {$sortDir} LIMIT ? OFFSET ?";
-                $params[] = $limit;
-                $params[] = $offset;
-                $types .= 'ii';
+                $dataQuery .= " ORDER BY {$sortBy} {$sortDir}";
+                if ($use_limit) {
+                    $dataQuery .= " LIMIT ? OFFSET ?";
+                    $params[] = $limit;
+                    $params[] = $offset;
+                    $types .= 'ii';
+                }
 
                 $stmt = $conn->prepare($dataQuery);
                 if (!empty($params)) {
@@ -68,6 +73,9 @@ try {
                 }
                 $stmt->execute();
                 $result = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+
+                $totalPages = $use_limit ? ceil($totalRecords / $limit) : 1;
+
                 echo json_encode([
                     'status' => 'success', 
                     'data' => $result,

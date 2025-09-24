@@ -126,32 +126,35 @@ try {
                 break;
 
             case 'update_status':
-                if ($role !== 'admin') throw new Exception("Hanya admin yang dapat mengubah status.");
-                $surat_id = $_POST['surat_id'];
-                $new_status = $_POST['status'];
+                if ($role !== 'admin') {
+                    throw new Exception("Hanya admin yang dapat mengubah status.");
+                }
+                $id = $_POST['id'] ?? $_POST['surat_id'] ?? 0;
+                $status = $_POST['status'] ?? '';
                 $nomor_surat = $_POST['nomor_surat'] ?? null;
                 $keterangan_admin = $_POST['keterangan_admin'] ?? null;
+                $processed_by_id = $_SESSION['user_id'];
 
                 $stmt = $conn->prepare("UPDATE surat_pengantar SET status = ?, nomor_surat = ?, keterangan_admin = ?, processed_by_id = ?, processed_at = NOW() WHERE id = ?");
-                $stmt->bind_param("sssii", $new_status, $nomor_surat, $keterangan_admin, $user_id, $surat_id);
+                $stmt->bind_param("sssii", $status, $nomor_surat, $keterangan_admin, $processed_by_id, $id);
                 $stmt->execute();
+                $stmt->close();
 
-                // Notify the user
-                $stmt_get_user = $conn->prepare("SELECT u.id FROM users u JOIN warga w ON u.username = w.nama_panggilan JOIN surat_pengantar s ON s.warga_id = w.id WHERE s.id = ?");
-                $stmt_get_user->bind_param("i", $surat_id);
-                $stmt_get_user->execute();
-                $user_to_notify = $stmt_get_user->get_result()->fetch_assoc();
-                if ($user_to_notify) {
-                    $status_text = ($new_status === 'approved') ? 'DISETUJUI' : 'DITOLAK';
-                    $message = "Permintaan surat Anda telah {$status_text}.";
-                    $link = '/surat-pengantar';
-                    $stmt_notif = $conn->prepare("INSERT INTO notifications (user_id, type, message, link) VALUES (?, 'surat_status', ?, ?)");
-                    $stmt_notif->bind_param("iss", $user_to_notify['id'], $message, $link);
-                    $stmt_notif->execute();
+                // --- Kirim Notifikasi ke Warga ---
+                $stmt_get_surat = $conn->prepare("SELECT warga_id, jenis_surat FROM surat_pengantar WHERE id = ?");
+                $stmt_get_surat->bind_param("i", $id);
+                $stmt_get_surat->execute();
+                $surat_info = $stmt_get_surat->get_result()->fetch_assoc();
+                $stmt_get_surat->close();
+
+                if ($surat_info) {
+                    $status_text = ($status === 'approved') ? 'DISETUJUI' : 'DITOLAK';
+                    $message = "Permintaan surat Anda ('{$surat_info['jenis_surat']}') telah {$status_text}.";
+                    send_notification_to_warga($surat_info['warga_id'], 'surat_status', $message, '/surat-pengantar');
                 }
 
-                log_activity($_SESSION['username'], 'Update Surat', "Mengubah status surat ID {$surat_id} menjadi {$new_status}");
-                echo json_encode(['status' => 'success', 'message' => "Status permintaan berhasil diubah."]);
+                log_activity($_SESSION['username'], 'Update Status Surat', "Mengubah status surat ID {$id} menjadi {$status}");
+                echo json_encode(['status' => 'success', 'message' => 'Status permintaan surat berhasil diperbarui.']);
                 break;
 
             case 'cancel_request':
