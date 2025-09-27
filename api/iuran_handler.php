@@ -177,13 +177,35 @@ try {
         $total_pemasukan = $summary_data['total_pemasukan'] ?? 0;
         $kk_belum_bayar = $summary_data['total_belum_bayar'] ?? 0;
 
-        $setting_result = $conn->query("SELECT setting_value FROM settings WHERE setting_key = 'monthly_fee'");
-        $jumlah_iuran_per_kk = (float)($setting_result->fetch_assoc()['setting_value'] ?? 50000);
-        $jumlah_belum_bayar = $kk_belum_bayar * $jumlah_iuran_per_kk;
+        // Gunakan nominal iuran yang berlaku untuk periode yang dipilih
+        // untuk perhitungan yang lebih akurat.
+        $jumlah_iuran_berlaku = get_fee_for_period($tahun, $bulan);
+        $jumlah_belum_bayar = $kk_belum_bayar * $jumlah_iuran_berlaku;
 
         echo json_encode(['status' => 'success', 'data' => [
             'total_pemasukan' => $total_pemasukan,
-            'jumlah_belum_bayar' => $jumlah_belum_bayar
+            'jumlah_belum_bayar' => $jumlah_belum_bayar,
+            'summary_text' => [
+                'pemasukan' => 'Total Pemasukan',
+                'belum_bayar' => 'Potensi Belum Bayar'
+            ],
+            'notes' => [
+                'belum_bayar' => "Dihitung berdasarkan {$kk_belum_bayar} KK yang belum bayar dengan nominal iuran yang berlaku pada periode ini (" . number_format($jumlah_iuran_berlaku, 0, ',', '.') . " per KK)."
+            ]
+        ]]);
+
+    } elseif ($_SERVER['REQUEST_METHOD'] === 'GET' && $action === 'get_fee_for_period') {
+        $tahun = $_GET['tahun'] ?? 0;
+        $bulan = $_GET['bulan'] ?? 0;
+
+        if (empty($tahun) || empty($bulan)) {
+            throw new Exception("Periode tahun dan bulan wajib diisi.");
+        }
+
+        $jumlah_iuran_berlaku = get_fee_for_period($tahun, $bulan);
+
+        echo json_encode(['status' => 'success', 'data' => [
+            'fee' => $jumlah_iuran_berlaku
         ]]);
 
     } elseif ($_SERVER['REQUEST_METHOD'] === 'GET' && $action === 'get_history') {

@@ -123,6 +123,20 @@ async function navigate(url, pushState = true) {
 
         runPageScripts(new URL(url).pathname); // Run scripts for the new page
 
+        // Handle hash for scrolling to a specific item
+        const hash = new URL(url).hash;
+        if (hash) { 
+            // Use a small timeout to ensure the element is rendered by the page script
+            setTimeout(() => {
+                const element = document.querySelector(hash);
+                if (element) {
+                    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    // Add a temporary highlight effect
+                    element.classList.add('highlight-item');
+                    setTimeout(() => element.classList.remove('highlight-item'), 3000);
+                }
+            }, 300); // 300ms delay should be enough
+        } 
     } catch (error) {
         console.error('Navigation error:', error);
         let errorMessage = 'Gagal memuat halaman. Silakan coba lagi.';
@@ -184,6 +198,9 @@ function runPageScripts(path) {
     else if (cleanPath === '/settings') {
         initSettingsPage();
     }
+    else if (cleanPath === '/settings/iuran-history') {
+        initIuranHistoriPerubahanPage();
+    }
     else if (cleanPath === '/my-profile/change-password') {
         initMyProfilePage();
     }
@@ -232,14 +249,23 @@ function runPageScripts(path) {
     else if (cleanPath === '/laporan/iuran') {
         initLaporanIuranPage();
     }
+    else if (cleanPath === '/laporan/iuran/statistik') {
+        initLaporanIuranStatistikPage();
+    }
     else if (cleanPath === '/log-aktivitas') {
         initLogAktivitasPage();
     }
     else if (cleanPath === '/log-panik') {
         initPanicLogPage();
     }
+    else if (cleanPath === '/laporan-terpadu') {
+        initLaporanTerpaduPage();
+    }
     else if (cleanPath.startsWith('/warga/profil/')) {
         initWargaProfilePage();
+    }
+    else if (cleanPath === '/manajemen') {
+        initManajemenPage();
     }
     else if (cleanPath === '/my-profile/edit') {
         initMyProfileEditPage();
@@ -249,6 +275,23 @@ function runPageScripts(path) {
 // =================================================================================
 // PAGE-SPECIFIC INITIALIZATION FUNCTIONS
 // =================================================================================
+
+function initManajemenPage() {
+    const triggerTabList = document.querySelectorAll('#manajemenTab button[data-bs-toggle="tab"]');
+    triggerTabList.forEach(triggerEl => {
+        triggerEl.addEventListener('shown.bs.tab', event => {
+            localStorage.setItem('lastManajemenTab', event.target.id);
+        });
+    });
+
+    const lastTabId = localStorage.getItem('lastManajemenTab');
+    if (lastTabId) {
+        const lastTab = document.querySelector(`#${lastTabId}`);
+        if (lastTab) {
+            new bootstrap.Tab(lastTab).show();
+        }
+    }
+}
 
 function initDashboardPage() {
     const totalWargaWidget = document.getElementById('total-warga-widget');
@@ -1105,19 +1148,23 @@ function initKeuanganPage() {
         minimumFractionDigits: 0
     });
 
-    const kategoriPemasukan = ['Iuran Warga', 'Sumbangan', 'Sewa Fasilitas', 'Saldo Awal', 'Lain-lain'];
-    const kategoriPengeluaran = ['Kebersihan', 'Keamanan', 'Listrik & Air', 'Perbaikan', 'Acara RT', 'Administrasi', 'Lain-lain'];
-
-    function updateKategoriOptions(jenis, selectedKategori = null) {
-        const kategoriList = jenis === 'masuk' ? kategoriPemasukan : kategoriPengeluaran;
-        kategoriSelectModal.innerHTML = '';
-        kategoriList.forEach(kat => {
-            const option = new Option(kat, kat);
-            if (kat === selectedKategori) {
-                option.selected = true;
-            }
-            kategoriSelectModal.add(option);
-        });
+    async function updateKategoriOptions(jenis, selectedKategori = null) {
+        kategoriSelectModal.innerHTML = '<option>Memuat...</option>';
+        try {
+            const response = await fetch(`${basePath}/api/kategori-kas`);
+            const result = await response.json();
+            if (result.status !== 'success') throw new Error('Gagal memuat kategori');
+            
+            const kategoriList = result.data[jenis] || [];
+            kategoriSelectModal.innerHTML = ''; // Clear loading/old options
+            kategoriList.forEach(item => {
+                const option = new Option(item.nama_kategori, item.nama_kategori);
+                if (item.nama_kategori === selectedKategori) { option.selected = true; }
+                kategoriSelectModal.add(option);
+            });
+        } catch (error) {
+            kategoriSelectModal.innerHTML = '<option value="">Gagal memuat</option>';
+        }
     }
 
     async function loadKas(searchTerm = '', jenis = '', page = 1, perPage = '10') {
@@ -1857,14 +1904,15 @@ function initIuranPage() {
     const searchInput = document.getElementById('search-iuran');
     const statusFilter = document.getElementById('filter-status-pembayaran');
     const bayarModalEl = document.getElementById('bayarModal');
-    const bayarModal = new bootstrap.Modal(bayarModalEl);
     const limitSelect = document.getElementById('iuran-limit');
     const paginationContainer = document.getElementById('iuran-pagination');
     const printBtn = document.getElementById('cetak-iuran-btn');
     const saveBayarBtn = document.getElementById('save-bayar-btn');
 
     if (!iuranTableBody) return;
-
+    
+    // Inisialisasi modal hanya jika elemennya ada
+    const bayarModal = bayarModalEl ? new bootstrap.Modal(bayarModalEl) : null;
     const currencyFormatter = new Intl.NumberFormat('id-ID', {
         style: 'currency',
         currency: 'IDR',
@@ -2010,24 +2058,38 @@ function initIuranPage() {
     statusFilter.addEventListener('change', combinedFilterHandler);
     limitSelect.addEventListener('change', combinedFilterHandler);
 
-    iuranTableBody.addEventListener('click', (e) => {
-        const bayarBtn = e.target.closest('.bayar-btn');
-        if (bayarBtn) {
+    iuranTableBody.addEventListener('click', async (e) => {
+        const bayarBtn = e.target.closest('.bayar-btn');        
+        if (bayarBtn && bayarModal) { // Pastikan modal ada
+            const tahun = tahunFilter.value;
+            const bulan = bulanFilter.value;
+
             document.getElementById('nama-warga-bayar').textContent = bayarBtn.dataset.nama;
-            document.getElementById('periode-bayar').textContent = `${bulanFilter.options[bulanFilter.selectedIndex].text} ${tahunFilter.value}`;
+            document.getElementById('periode-bayar').textContent = `${bulanFilter.options[bulanFilter.selectedIndex].text} ${tahun}`;
             const hiddenInput = document.getElementById('bayar-warga-id'); // Assuming this ID exists
             hiddenInput.name = 'no_kk'; // Change name to match backend
             hiddenInput.value = bayarBtn.dataset.noKk;
-            document.getElementById('bayar-periode-tahun').value = tahunFilter.value;
-            document.getElementById('bayar-periode-bulan').value = bulanFilter.value;
+            document.getElementById('bayar-periode-tahun').value = tahun;
+            document.getElementById('bayar-periode-bulan').value = bulan;
             document.getElementById('catatan_bayar').value = '';
             document.getElementById('bayar-tanggal').valueAsDate = new Date();
+
+            // Fetch the correct fee for the period
+            const jumlahInput = document.getElementById('bayar-jumlah');
+            jumlahInput.value = ''; // Clear previous value
+            jumlahInput.placeholder = 'Memuat...';
+            
             bayarModal.show();
+
+            const response = await fetch(`${basePath}/api/iuran?action=get_fee_for_period&tahun=${tahun}&bulan=${bulan}`);
+            const result = await response.json();
+            jumlahInput.value = result.data.fee || 0;
         }
     });
 
-    saveBayarBtn.addEventListener('click', async () => {
-        const form = document.getElementById('bayar-form');
+    if (saveBayarBtn && bayarModal) {        
+        saveBayarBtn.addEventListener('click', async () => {
+        const form = document.getElementById('bayar-form'); // Pastikan form ada
         const formData = new FormData(form);
         formData.append('action', 'bayar');
 
@@ -2056,7 +2118,7 @@ function initIuranPage() {
             saveBayarBtn.disabled = false;
             saveBayarBtn.innerHTML = originalBtnHtml;
         }
-    });
+    });    }
 
     setupFilters();
     loadIuranSummary(); // Load summary on initial page load
@@ -2154,8 +2216,8 @@ function initKegiatanPage() {
                         </div>` : '';
 
                     const card = `
-                        <div class="col-md-6 col-lg-4 mb-4">
-                            <div class="card h-100">
+                        <div class="col-md-6 col-lg-4 mb-4" id="kegiatan-${k.id}">
+                            <div class="card h-100 shadow-sm">
                                 <div class="card-body">
                                     <h5 class="card-title">${k.judul}</h5>
                                     <h6 class="card-subtitle mb-2 text-muted">${tglFormatted}</h6>
@@ -2494,6 +2556,7 @@ function initSettingsPage() {
     const saveGeneralSettingsBtn = document.getElementById('save-settings-btn');
     const generalSettingsForm = document.getElementById('settings-form');
     const suratTemplateTab = document.getElementById('surat-template-tab');
+    let settingsData = {}; // Store settings data globally within the function scope
 
     // --- General Settings ---
     if (!generalSettingsContainer) return;
@@ -2504,6 +2567,7 @@ function initSettingsPage() {
             const result = await response.json();
 
             if (result.status === 'success') {
+                settingsData = result.data; // Store the data
                 const settings = result.data;
                 generalSettingsContainer.innerHTML = `
                     <div class="mb-3">
@@ -2520,12 +2584,41 @@ function initSettingsPage() {
                         <small class="form-text text-muted">Nama ini akan ditampilkan di bagian tanda tangan surat.</small>
                     </div>
                     <div class="mb-3">
-                        <label for="monthly_fee" class="form-label">Iuran Bulanan (Rp)</label>
-                        <input type="number" class="form-control" id="monthly_fee" name="monthly_fee" value="${settings.monthly_fee || ''}">
-                    </div>
-                    <div class="mb-3">
                         <label for="notification_interval" class="form-label">Interval Refresh Notifikasi (ms)</label>
                         <input type="number" class="form-control" id="notification_interval" name="notification_interval" value="${settings.notification_interval || ''}">
+                    </div>
+                    <hr>
+                    <h5>Pengaturan Keuangan</h5>
+                    <div class="mb-3">
+                        <label class="form-label">Iuran Bulanan Saat Ini</label>
+                        <div class="input-group">
+                            <span class="input-group-text">Rp</span>
+                            <input type="text" class="form-control" value="${new Intl.NumberFormat('id-ID').format(settings.monthly_fee || 0)}" readonly>
+                            <button class="btn btn-outline-primary" type="button" id="change-fee-btn" data-bs-toggle="modal" data-bs-target="#iuranModal">
+                                <i class="bi bi-pencil-fill"></i> Ubah
+                            </button>
+                            <a href="${basePath}/settings/iuran-history" class="btn btn-outline-secondary" title="Lihat Histori Perubahan">
+                                <i class="bi bi-clock-history"></i>
+                            </a>
+                        </div>
+                    </div>
+                    <!-- Modal Iuran -->
+                    <div class="modal fade" id="iuranModal" tabindex="-1" aria-labelledby="iuranModalLabel" aria-hidden="true">
+                      <div class="modal-dialog">
+                        <div class="modal-content">
+                          <div class="modal-header">
+                            <h5 class="modal-title" id="iuranModalLabel">Ubah Nominal Iuran Bulanan</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                          </div>
+                          <div class="modal-body">
+                            <p>Nominal iuran saat ini: <strong>Rp ${new Intl.NumberFormat('id-ID').format(settings.monthly_fee || 0)}</strong></p>
+                            <div class="mb-3"><label for="new_monthly_fee" class="form-label">Nominal Iuran Baru (Rp)</label><input type="number" class="form-control" id="new_monthly_fee" name="monthly_fee" value="${settings.monthly_fee || ''}"></div>
+                            <div class="mb-3"><label for="fee_start_date" class="form-label">Mulai Berlaku Tanggal</label><input type="date" class="form-control" id="fee_start_date" name="fee_start_date" value="${new Date().toISOString().slice(0,10)}"></div>
+                            <div class="alert alert-warning small"><i class="bi bi-exclamation-triangle-fill"></i> Perubahan ini akan dicatat dalam histori dan akan mempengaruhi perhitungan tunggakan di masa mendatang. Pastikan tanggal mulai berlaku sudah benar.</div>
+                          </div>
+                          <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button><button type="button" class="btn btn-primary" id="save-iuran-change-btn" data-bs-dismiss="modal">Simpan Perubahan</button></div>
+                        </div>
+                      </div>
                     </div>
                     <div class="mb-3">
                         <label for="log_cleanup_interval_days" class="form-label">Interval Bersihkan Log (hari)</label>
@@ -2594,6 +2687,15 @@ function initSettingsPage() {
             generalSettingsContainer.innerHTML = `<div class="alert alert-danger">Gagal memuat pengaturan: ${error.message}</div>`;
         }
     }
+
+    // Listener untuk tombol simpan di modal iuran.
+    // Kita tidak menyimpan langsung, tapi hanya memicu tombol simpan utama.
+    // Ini memastikan semua data di form (termasuk yang di modal) terkirim bersamaan.
+    generalSettingsContainer.addEventListener('click', function(e) {
+        if (e.target.id === 'save-iuran-change-btn') {
+            saveGeneralSettingsBtn.click();
+        }
+    });
 
     saveGeneralSettingsBtn.addEventListener('click', async () => {
         const formData = new FormData(generalSettingsForm);
@@ -2749,6 +2851,57 @@ function initSuratTemplateSettings() {
     });
 
     loadTemplates();
+}
+
+function initIuranHistoriPerubahanPage() {
+    const tableBody = document.getElementById('fee-history-table-body');
+    if (!tableBody) return;
+
+    const currencyFormatter = new Intl.NumberFormat('id-ID', {
+        style: 'currency',
+        currency: 'IDR',
+        minimumFractionDigits: 0
+    });
+
+    async function loadHistory() {
+        tableBody.innerHTML = '<tr><td colspan="5" class="text-center p-5"><div class="spinner-border"></div></td></tr>';
+        try {
+            const response = await fetch(`${basePath}/api/settings?action=get_fee_history`);
+            const result = await response.json();
+
+            if (result.status === 'success') {
+                tableBody.innerHTML = '';
+                if (result.data.length > 0) {
+                    result.data.forEach(item => {
+                        const startDate = new Date(item.start_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
+                        const endDate = item.end_date 
+                            ? new Date(item.end_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })
+                            : '<span class="badge bg-success">Saat Ini</span>';
+                        const createdAt = new Date(item.created_at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
+
+                        const row = `
+                            <tr>
+                                <td class="fw-bold">${currencyFormatter.format(item.monthly_fee)}</td>
+                                <td>${startDate}</td>
+                                <td>${endDate}</td>
+                                <td>${item.updated_by_name || 'N/A'}</td>
+                                <td>${createdAt}</td>
+                            </tr>
+                        `;
+                        tableBody.insertAdjacentHTML('beforeend', row);
+                    });
+                } else {
+                    tableBody.innerHTML = '<tr><td colspan="5" class="text-center">Belum ada histori perubahan nominal iuran.</td></tr>';
+                }
+            } else {
+                throw new Error(result.message);
+            }
+        } catch (error) {
+            tableBody.innerHTML = `<tr><td colspan="5" class="text-center text-danger">Gagal memuat histori: ${error.message}</td></tr>`;
+        }
+    }
+
+    loadHistory();
 }
 
 function initMyProfilePage() {
@@ -3384,6 +3537,38 @@ function initSuratPengantarPage() {
     }
 }
 
+function initLaporanTerpaduPage() {
+    // Initialize the first tab's content on page load
+    initLaporanKeuanganPage();
+
+    const triggerTabList = document.querySelectorAll('#laporanTerpaduTab button[data-bs-toggle="tab"]');
+    triggerTabList.forEach(triggerEl => {
+        triggerEl.addEventListener('shown.bs.tab', event => {
+            const targetId = event.target.getAttribute('data-bs-target');
+            if (targetId === '#laporan-keuangan-pane') {
+                initLaporanKeuanganPage();
+            } else if (targetId === '#laporan-tunggakan-pane') {
+                initLaporanIuranPage();
+            } else if (targetId === '#laporan-statistik-pane') {
+                initLaporanIuranStatistikPage();
+            } else if (targetId === '#laporan-surat-pane') {
+                initLaporanSuratPage();
+            }
+            localStorage.setItem('lastLaporanTerpaduTab', event.target.id);
+        });
+    });
+
+    // Handle tab persistence on page load
+    const lastTabId = localStorage.getItem('lastLaporanTerpaduTab');
+    if (lastTabId) {
+        const lastTab = document.querySelector(`#${lastTabId}`);
+        if (lastTab) {
+            // Use 'shown.bs.tab' to trigger the correct init function after the tab is shown
+            new bootstrap.Tab(lastTab).show();
+        }
+    }
+}
+
 function initLaporanSuratPage() {
     const tipeFilter = document.getElementById('laporan-tipe-filter');
     const bulanFilterContainer = document.getElementById('laporan-bulan-filter-container');
@@ -3395,8 +3580,6 @@ function initLaporanSuratPage() {
     const exportPdfBtn = document.getElementById('export-surat-pdf-btn');
     const exportExcelBtn = document.getElementById('export-surat-excel-btn');
     const chartCanvas = document.getElementById('surat-report-chart');
-
-    let suratChart;
 
     if (!tipeFilter || !bulanFilter || !tahunFilter || !tableBody || !statusFilter || !chartCanvas) return;
 
@@ -3451,9 +3634,9 @@ function initLaporanSuratPage() {
         } catch (error) {
             tableBody.innerHTML = `<tr><td colspan="2" class="text-center text-danger">Gagal memuat laporan.</td></tr>`;
             totalSummary.textContent = 'Error';
-            if (suratChart) {
-                suratChart.destroy();
-                suratChart = null;
+            if (window.laporanSuratChart) {
+                window.laporanSuratChart.destroy();
+                window.laporanSuratChart = null;
             }
             showToast(error.message, 'error');
         }
@@ -3472,8 +3655,8 @@ function initLaporanSuratPage() {
     }
 
     function renderSuratChart(details) {
-        if (suratChart) {
-            suratChart.destroy();
+        if (window.laporanSuratChart) {
+            window.laporanSuratChart.destroy();
         }
 
         if (!details || details.length === 0) {
@@ -3490,7 +3673,7 @@ function initLaporanSuratPage() {
             'rgba(199, 199, 199, 0.7)', 'rgba(83, 102, 255, 0.7)'
         ];
 
-        suratChart = new Chart(chartCanvas, {
+        window.laporanSuratChart = new Chart(chartCanvas, {
             type: 'doughnut',
             data: {
                 labels: labels,
@@ -3515,13 +3698,13 @@ function initLaporanSuratPage() {
     exportPdfBtn.addEventListener('click', (e) => {
         e.preventDefault();
 
-        if (!suratChart) {
+        if (!window.laporanSuratChart) {
             showToast('Grafik belum dimuat atau tidak ada data untuk diekspor.', 'error');
             return;
         }
 
         // 1. Ambil gambar grafik sebagai base64
-        const chartImage = suratChart.toBase64Image();
+        const chartImage = window.laporanSuratChart.toBase64Image();
         
         // 2. Simpan gambar di sessionStorage untuk diteruskan ke tab baru
         try {
@@ -3562,6 +3745,7 @@ function initLaporanSuratPage() {
         updateExportLinks();
     });
 
+    // Panggil fungsi untuk mengisi filter dan memuat data awal
     setupFilters();
     loadReport();
     updateExportLinks();
@@ -3585,7 +3769,7 @@ function initAsetPage() {
             result.data.forEach(a => {
                 const kondisiColors = { 'Baik': 'success', 'Rusak Ringan': 'warning', 'Rusak Berat': 'danger' };
                 const row = `
-                    <tr>
+                    <tr id="aset-${a.id}">
                         <td>${a.nama_aset}</td>
                         <td>${a.jumlah}</td>
                         <td><span class="badge bg-${kondisiColors[a.kondisi]}">${a.kondisi}</span></td>
@@ -4160,6 +4344,118 @@ function initLaporanIuranPage() {
     updateActionButtons();
 }
 
+function initLaporanIuranStatistikPage() {
+    const tahunFilter = document.getElementById('statistik-tahun-filter');
+    const loadingSpinner = document.getElementById('statistik-loading-spinner');
+    const pemasukanCanvas = document.getElementById('pemasukan-chart');
+    const kepatuhanCanvas = document.getElementById('kepatuhan-chart');
+
+    function setupFilters() {
+        const currentYear = new Date().getFullYear();
+        for (let i = 0; i < 5; i++) {
+            const year = currentYear - i;
+            tahunFilter.add(new Option(year, year));
+        }
+    }
+
+    async function loadStatistik() {
+        loadingSpinner.style.display = 'block';
+        if (window.laporanStatistikPemasukanChart) window.laporanStatistikPemasukanChart.destroy();
+        if (window.laporanStatistikKepatuhanChart) window.laporanStatistikKepatuhanChart.destroy();
+
+        const selectedYear = tahunFilter.value;
+
+        try {
+            const response = await fetch(`${basePath}/api/laporan/iuran/statistik?tahun=${selectedYear}`);
+            const result = await response.json();
+
+            if (result.status === 'success') {
+                const { labels, pemasukan, kepatuhan } = result.data;
+
+                // Render Pemasukan Chart (Bar)
+                window.laporanStatistikPemasukanChart = new Chart(pemasukanCanvas, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: pemasukan.label,
+                            data: pemasukan.data,
+                            backgroundColor: 'rgba(75, 192, 192, 0.6)',
+                            borderColor: 'rgba(75, 192, 192, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    callback: function(value) { return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(value); }
+                                }
+                            }
+                        }
+                    }
+                });
+
+                // Render Kepatuhan Chart (Line)
+                window.laporanStatistikKepatuhanChart = new Chart(kepatuhanCanvas, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: kepatuhan.label,
+                            data: kepatuhan.data,
+                            fill: false,
+                            borderColor: 'rgb(255, 99, 132)',
+                            tension: 0.1
+                        }]
+                    },
+                    options: {
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                max: 100,
+                                ticks: { callback: function(value) { return value + "%" } }
+                            }
+                        },
+                        plugins: {
+                            annotation: {
+                                annotations: {
+                                    targetLine: {
+                                        type: 'line',
+                                        yMin: 90,
+                                        yMax: 90,
+                                        borderColor: 'rgb(220, 53, 69)', // bs-danger
+                                        borderWidth: 2,
+                                        borderDash: [6, 6],
+                                        label: {
+                                            content: 'Target 90%',
+                                            position: 'end',
+                                            backgroundColor: 'rgba(220, 53, 69, 0.8)',
+                                            enabled: true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+
+            } else { throw new Error(result.message); }
+        } catch (error) {
+            showToast(`Gagal memuat statistik: ${error.message}`, 'error');
+        } finally {
+            loadingSpinner.style.display = 'none';
+        }
+    }
+
+    if (!tahunFilter || !loadingSpinner || !pemasukanCanvas || !kepatuhanCanvas) return;
+
+    tahunFilter.addEventListener('change', loadStatistik);
+    setupFilters();
+    loadStatistik();
+}
+
 function initLogAktivitasPage() {
     const tableBody = document.getElementById('log-table-body');
     const searchInput = document.getElementById('search-log');
@@ -4391,8 +4687,8 @@ function initPengumumanPage() {
                         </div>` : '';
 
                     const card = `
-                        <div class="col-12 mb-4">
-                            <div class="card">
+                        <div class="col-12 mb-4" id="pengumuman-${p.id}">
+                            <div class="card shadow-sm">
                                 <div class="card-header bg-transparent border-0 d-flex justify-content-between">
                                     <small class="text-muted">Diposting oleh ${p.pembuat || 'Admin'} pada ${tglFormatted}</small>
                                     ${statusBadge}
@@ -4541,8 +4837,6 @@ function initLaporanKeuanganPage() {
     const loadingSpinner = document.getElementById('laporan-loading-spinner');
     const monthlyCtx = document.getElementById('monthly-summary-chart');
     const expenseCtx = document.getElementById('expense-category-chart');
-    let monthlyChart, expenseChart;
-
     const currencyFormatter = new Intl.NumberFormat('id-ID', {
         style: 'currency',
         currency: 'IDR',
@@ -4617,11 +4911,11 @@ function initLaporanKeuanganPage() {
             const expenseData = await expenseRes.json();
 
             // Destroy old charts if they exist
-            if (monthlyChart) monthlyChart.destroy();
-            if (expenseChart) expenseChart.destroy();
+            if (window.laporanKeuanganMonthlyChart) window.laporanKeuanganMonthlyChart.destroy();
+            if (window.laporanKeuanganExpenseChart) window.laporanKeuanganExpenseChart.destroy();
 
             // Render Monthly Summary Chart (Bar)
-            monthlyChart = new Chart(monthlyCtx, {
+            window.laporanKeuanganMonthlyChart = new Chart(monthlyCtx, {
                 type: 'bar',
                 data: {
                     labels: monthlyData.data.labels,
@@ -4633,7 +4927,7 @@ function initLaporanKeuanganPage() {
             });
 
             // Render Expense Category Chart (Pie)
-            expenseChart = new Chart(expenseCtx, {
+            window.laporanKeuanganExpenseChart = new Chart(expenseCtx, {
                 type: 'pie',
                 data: {
                     labels: Object.keys(expenseData.data),
@@ -4654,6 +4948,7 @@ function initLaporanKeuanganPage() {
         loadChartData();
         loadMonthlySummaryDetails();
     });
+    yearFilter.dataset.listenerAdded = 'true'; // Mark as added
 
     monthFilter.addEventListener('change', loadMonthlySummaryDetails);
 
@@ -4691,7 +4986,7 @@ function initDokumenPage() {
                     ` : '';
 
                     const row = `
-                        <tr>
+                        <tr id="dokumen-${d.id}">
                             <td>
                                 <a href="${basePath}/${d.path_file.replace(/\\/g, '/')}" target="_blank">
                                     <i class="bi bi-file-earmark-text-fill"></i> ${d.nama_dokumen}
@@ -5422,6 +5717,87 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 /**
+ * Initializes the global search functionality.
+ */
+function initGlobalSearch() {
+    const searchModalEl = document.getElementById('globalSearchModal');
+    if (!searchModalEl) return;
+
+    const searchInput = document.getElementById('global-search-input');
+    const resultsContainer = document.getElementById('global-search-results');
+    const spinner = document.getElementById('global-search-spinner');
+    const searchModal = new bootstrap.Modal(searchModalEl);
+
+    let debounceTimer;
+
+    const performSearch = async () => {
+        const term = searchInput.value.trim();
+
+        if (term.length < 3) {
+            resultsContainer.innerHTML = '<p class="text-muted text-center">Masukkan minimal 3 karakter untuk mencari.</p>';
+            spinner.style.display = 'none';
+            return;
+        }
+
+        spinner.style.display = 'block';
+
+        try {
+            const response = await fetch(`${basePath}/api/global-search?term=${encodeURIComponent(term)}`);
+            const result = await response.json();
+
+            resultsContainer.innerHTML = '';
+            if (result.status === 'success' && result.data.length > 0) {
+                result.data.forEach(item => {
+                    const resultItem = `
+                        <a href="${basePath}${item.link}" class="search-result-item" data-bs-dismiss="modal">
+                            <div class="d-flex align-items-center">
+                                <i class="bi ${item.icon} fs-4 me-3 text-primary"></i>
+                                <div>
+                                    <div class="fw-bold">${item.title}</div>
+                                    <small class="text-muted">${item.subtitle}</small>
+                                </div>
+                                <span class="badge bg-secondary ms-auto">${item.type}</span>
+                            </div>
+                        </a>
+                    `;
+                    resultsContainer.insertAdjacentHTML('beforeend', resultItem);
+                });
+            } else if (result.status === 'success') {
+                resultsContainer.innerHTML = `<p class="text-muted text-center">Tidak ada hasil ditemukan untuk "<strong>${term}</strong>".</p>`;
+            } else {
+                throw new Error(result.message);
+            }
+        } catch (error) {
+            resultsContainer.innerHTML = `<p class="text-danger text-center">Terjadi kesalahan: ${error.message}</p>`;
+        } finally {
+            spinner.style.display = 'none';
+        }
+    };
+
+    searchInput.addEventListener('input', () => {
+        clearTimeout(debounceTimer);
+        spinner.style.display = 'block';
+        debounceTimer = setTimeout(performSearch, 500); // Debounce for 500ms
+    });
+
+    searchModalEl.addEventListener('shown.bs.modal', () => {
+        searchInput.focus();
+    });
+
+    searchModalEl.addEventListener('hidden.bs.modal', () => {
+        searchInput.value = '';
+        resultsContainer.innerHTML = '<p class="text-muted text-center">Masukkan kata kunci untuk memulai pencarian.</p>';
+    });
+
+    // Add keyboard shortcut (Ctrl+K or Cmd+K)
+    document.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+            e.preventDefault(); // Prevent default browser action (e.g., search)
+            searchModal.show();
+        }
+    });
+}
+/**
  * Renders pagination controls.
  * @param {HTMLElement} container The container element for the pagination.
  * @param {object|null} pagination The pagination object from the API.
@@ -5487,3 +5863,6 @@ function renderPagination(container, pagination, onPageClick) {
         }
     });
 }
+
+// Initialize global search on every page load
+initGlobalSearch();

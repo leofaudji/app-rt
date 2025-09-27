@@ -16,59 +16,80 @@ try {
     $min_tunggakan = $_GET['min_tunggakan'] ?? 2;
     $search = $_GET['search'] ?? '';
 
-    // Ambil jumlah iuran bulanan dari settings
-    $iuran_per_bulan = (float)get_setting('monthly_fee', 50000);
-
-    // Bulan yang sudah seharusnya dibayar (tidak termasuk bulan ini)
+    // Tentukan bulan-bulan yang harus sudah dibayar pada tahun yang dipilih
     $current_year = (int)date('Y');
     $current_month = (int)date('m');
+    $months_due_list = [];
 
-    // Jika tahun yang difilter bukan tahun ini, maka 12 bulan harus dibayar
     if ($tahun < $current_year) {
-        $months_due = 12;
-        $month_limit = 13; // to include up to month 12
+        $months_due_list = range(1, 12);
     } elseif ($tahun > $current_year) {
-        $months_due = 0;
-        $month_limit = 1; // to include no months
-    } else { // current year
-        $months_due = $current_month - 1;
-        $month_limit = $current_month;
+        $months_due_list = []; // Tidak ada tunggakan untuk tahun depan
+    } else { // Tahun ini, tunggakan dihitung sampai bulan kemarin
+        if ($current_month > 1) {
+            $months_due_list = range(1, $current_month - 1);
+        }
     }
 
-    $params = [$months_due, $tahun, $month_limit, $min_tunggakan];
-    $types = 'iiii';
-
-    $query = "
-        SELECT 
-            w.no_kk, 
-            w.nama_lengkap,
-            CONCAT(r.blok, ' / ', r.nomor) as alamat,
-            (GREATEST(0, ? - (SELECT COUNT(i.id) FROM iuran i WHERE i.no_kk = w.no_kk AND i.periode_tahun = ? AND i.periode_bulan < ?))) as jumlah_tunggakan
+    // Ambil semua kepala keluarga yang aktif
+    $warga_query = "
+        SELECT w.no_kk, w.nama_lengkap, CONCAT(r.blok, ' / ', r.nomor) as alamat
         FROM warga w
         JOIN rumah r ON w.no_kk = r.no_kk_penghuni
         WHERE w.status_dalam_keluarga = 'Kepala Keluarga'
     ";
-
+    $params = [];
+    $types = '';
     if (!empty($search)) {
-        $query .= " AND w.nama_lengkap LIKE ?";
+        $warga_query .= " AND w.nama_lengkap LIKE ?";
         $params[] = "%{$search}%";
         $types .= 's';
     }
-
-    $query .= " HAVING jumlah_tunggakan >= ? ORDER BY jumlah_tunggakan DESC, w.nama_lengkap ASC";
-
-    $stmt = $conn->prepare($query);
-    $stmt->bind_param($types, ...$params);
-    $stmt->execute();
-    $result = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-    $stmt->close();
-
-    $total_potensi = 0;
-    foreach ($result as &$row) {
-        $row['total_tunggakan'] = $row['jumlah_tunggakan'] * $iuran_per_bulan;
-        $total_potensi += $row['total_tunggakan'];
+    $warga_query .= " ORDER BY w.nama_lengkap ASC";
+    $stmt_warga = $conn->prepare($warga_query);
+    if (!empty($params)) {
+        $stmt_warga->bind_param($types, ...$params);
     }
-    unset($row);
+    $stmt_warga->execute();
+    $all_warga = $stmt_warga->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt_warga->close();
+
+    // Ambil semua data iuran untuk tahun yang dipilih untuk efisiensi
+    $stmt_iuran = $conn->prepare("SELECT no_kk, periode_bulan FROM iuran WHERE periode_tahun = ?");
+    $stmt_iuran->bind_param('i', $tahun);
+    $stmt_iuran->execute();
+    $paid_iuran_raw = $stmt_iuran->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt_iuran->close();
+
+    // Kelompokkan iuran yang sudah dibayar per no_kk untuk pencarian cepat
+    $paid_iuran_map = [];
+    foreach ($paid_iuran_raw as $iuran) {
+        $paid_iuran_map[$iuran['no_kk']][] = (int)$iuran['periode_bulan'];
+    }
+
+    $result = [];
+    $total_potensi = 0;
+
+    foreach ($all_warga as $warga) {
+        $paid_months = $paid_iuran_map[$warga['no_kk']] ?? [];
+        $unpaid_months = array_diff($months_due_list, $paid_months);
+        
+        $jumlah_tunggakan = count($unpaid_months);
+        if ($jumlah_tunggakan < $min_tunggakan) {
+            continue;
+        }
+
+        $total_tunggakan_amount = 0;
+        foreach ($unpaid_months as $unpaid_month) {
+            // Gunakan fungsi baru untuk mendapatkan iuran yang benar untuk setiap bulan
+            $total_tunggakan_amount += get_fee_for_period($tahun, $unpaid_month);
+        }
+
+        $warga['jumlah_tunggakan'] = $jumlah_tunggakan;
+        $warga['total_tunggakan'] = $total_tunggakan_amount;
+        $result[] = $warga;
+        $total_potensi += $total_tunggakan_amount;
+    }
 
     echo json_encode([
         'status' => 'success',

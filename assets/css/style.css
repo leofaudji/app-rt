@@ -1,26 +1,28 @@
 :root {
-    --cf-blue: #0d6efd;
-    --cf-bg-color: #f0f2f5; /* Light grey */
+    /* macOS Light Mode Palette */
+    --cf-blue: #007aff; /* Apple Blue */
+    --cf-bg-color: #f2f2f7; /* System Background */
     --cf-card-bg-color: #ffffff;   
-    --cf-border-color: #dee2e6;
+    --cf-border-color: rgba(0, 0, 0, 0.1);
     --cf-text-color: #212529;
     --cf-text-muted-color: #6c757d;
     --cf-input-bg-color: #ffffff;
-    --cf-table-striped-bg: rgba(0, 0, 0, 0.05);
+    --cf-table-striped-bg: #f9f9f9;
     --cf-modal-bg: #ffffff;
     --sidebar-width: 260px;
     --sidebar-bg: var(--cf-card-bg-color); /* Light background */
     --sidebar-link-color: var(--cf-text-muted-color); /* Dark text */
     --sidebar-link-hover-color: var(--cf-text-color); /* Darker text on hover */
-    --sidebar-link-active-color: #ffffff;
+    --sidebar-link-active-color: var(--cf-blue);
     --sidebar-link-active-bg: var(--cf-blue); /* Blue background for active link */
 }
 
 body.dark-mode {
-    --cf-blue: #3793ff;
-    --cf-bg-color: #121212;
-    --cf-card-bg-color: #1e1e1e;
-    --cf-border-color: #444;
+    /* macOS Dark Mode Palette */
+    --cf-blue: #0a84ff; /* Brighter Apple Blue for dark mode */
+    --cf-bg-color: #1c1c1e; /* System Background */
+    --cf-card-bg-color: #2c2c2e; /* Grouped Background */
+    --cf-border-color: rgba(255, 255, 255, 0.15);
     --cf-text-color: #e0e0e0;
     --cf-text-muted-color: #a0a0a0;
     --cf-input-bg-color: #2a2a2a;
@@ -29,12 +31,13 @@ body.dark-mode {
     --sidebar-bg: #1e1e1e;
     --sidebar-link-color: var(--cf-text-muted-color);
     --sidebar-link-hover-color: var(--cf-text-color);
-    --sidebar-link-active-bg: var(--cf-blue);
+    --sidebar-link-active-bg: rgba(10, 132, 255, 0.3); /* Semi-transparent blue */
 }
 
 body {
     background-color: var(--cf-bg-color);
     color: var(--cf-text-color);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
 /* --- Sidebar --- */
@@ -99,26 +102,30 @@ body.dark-mode .sidebar .navbar-brand {
     text-align: left;
     padding: 0.65rem 1.5rem;
     color: var(--sidebar-link-color);
-    font-weight: 500;
-    border-left: 3px solid transparent;
-    transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out, border-color 0.15s ease-in-out;
+    font-weight: 400;
+    transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    border-radius: 6px;
+    margin: 0 0.75rem;
+    width: calc(100% - 1.5rem);
 }
 
 .sidebar-nav .nav-link:hover {
     color: var(--sidebar-link-hover-color);
     background-color: var(--cf-table-striped-bg); /* Use a subtle grey for hover on light bg */
-    /* Add a subtle border color on hover for better feedback */
-    border-left-color: var(--sidebar-link-active-bg);
 }
 
 .sidebar-nav .nav-link.active {
-    color: var(--sidebar-link-active-color);
+    color: var(--sidebar-link-hover-color);
     background-color: var(--sidebar-link-active-bg);
-    border-left-color: var(--sidebar-link-active-bg); /* Match the active background */
-    font-weight: bold; /* Make the active link's text bold */
+    font-weight: 600; /* Make the active link's text semi-bold */
+}
+
+body:not(.dark-mode) .sidebar-nav .nav-link.active {
+    color: var(--cf-blue);
+    background-color: rgba(0, 122, 255, 0.1);
 }
 
 .sidebar-nav .nav-link .bi {
@@ -200,6 +207,8 @@ body.dark-mode #sidebar-toggle-btn {
 .card {
     background-color: var(--cf-card-bg-color);
     border: 1px solid var(--cf-border-color);
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
 }
 
 .card-header, .card-footer {
@@ -236,8 +245,10 @@ body.dark-mode #sidebar-toggle-btn {
 .btn-primary {
     --bs-btn-bg: var(--cf-blue);
     --bs-btn-border-color: var(--cf-blue);
-    --bs-btn-hover-bg: #0b5ed7;
-    --bs-btn-hover-border-color: #0a58ca;
+    --bs-btn-hover-bg: #0069d9;
+    --bs-btn-hover-border-color: #0062cc;
+    --bs-btn-active-bg: #005cbf;
+    --bs-btn-active-border-color: #0056b3;
 }
 
 .badge.text-bg-primary {
@@ -416,4 +427,29 @@ body.dark-mode .text-muted {
 
 #panic-button.is-holding::before {
     width: 100%;
+}
+
+.management-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 0.5rem 1rem rgba(0,0,0,.15) !important;
+    color: var(--cf-text-color);
+    background-color: var(--cf-table-striped-bg);
+}
+
+.management-card .icon-wrapper {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 1rem;
+    transition: all 0.3s ease-in-out;
+}
+.management-card .icon-wrapper .bi {
+    font-size: 2rem;
+}
+.management-card:hover .icon-wrapper {
+    background-color: var(--cf-blue) !important;
+    color: white !important;
 }

@@ -1,6 +1,6 @@
 SET FOREIGN_KEY_CHECKS = 0;
 
-DROP TABLE IF EXISTS `iuran`, `laporan_warga`, `kegiatan`, `kas`, `warga`, `rumah`, `rumah_penghuni_history`, `users`, `notifications`, `pengumuman`, `activity_log`, `settings`, `dokumen`, `fasilitas`, `booking_fasilitas`, `polling`, `polling_votes`, `anggaran`, `surat_pengantar`, `surat_templates`, `aset_rt`, `panic_log`, `peminjaman_aset`, `surat_keluar`, `struktur_organisasi`, `tamu`, `usaha_warga`, `galeri_album`, `galeri_foto`, `galeri_komentar`;
+DROP TABLE IF EXISTS `iuran`, `laporan_warga`, `kegiatan`, `kas`, `warga`, `rumah`, `rumah_penghuni_history`, `users`, `notifications`, `pengumuman`, `activity_log`, `settings`, `dokumen`, `fasilitas`, `booking_fasilitas`, `polling`, `polling_votes`, `anggaran`, `surat_pengantar`, `surat_templates`, `aset_rt`, `panic_log`, `peminjaman_aset`, `surat_keluar`, `struktur_organisasi`, `tamu`, `usaha_warga`, `galeri_album`, `galeri_foto`, `galeri_komentar`, `kas_kategori`,`iuran_settings_history`;
 
 SET FOREIGN_KEY_CHECKS = 1;
 
@@ -415,11 +415,46 @@ CREATE TABLE `galeri_komentar` (
   FOREIGN KEY (`warga_id`) REFERENCES `warga` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Tabel untuk kategori kas
+CREATE TABLE `kas_kategori` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `nama_kategori` varchar(100) NOT NULL,
+  `jenis` enum('masuk','keluar') NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `nama_kategori_jenis` (`nama_kategori`,`jenis`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Data awal untuk kategori kas
+INSERT INTO `kas_kategori` (`nama_kategori`, `jenis`) VALUES
+('Iuran Warga', 'masuk'),
+('Sumbangan', 'masuk'),
+('Sewa Fasilitas', 'masuk'),
+('Saldo Awal', 'masuk'),
+('Lain-lain', 'masuk'),
+('Kebersihan', 'keluar'),
+('Keamanan', 'keluar'),
+('Listrik & Air', 'keluar'),
+('Perbaikan', 'keluar'),
+('Acara RT', 'keluar'),
+('Administrasi', 'keluar'),
+('Lain-lain', 'keluar');
+
 -- Tabel untuk pengaturan umum
 CREATE TABLE `settings` (
   `setting_key` varchar(50) NOT NULL,
   `setting_value` text DEFAULT NULL,
   PRIMARY KEY (`setting_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Tabel untuk histori perubahan nominal iuran
+CREATE TABLE `iuran_settings_history` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `monthly_fee` decimal(10,2) NOT NULL,
+  `start_date` date NOT NULL,
+  `end_date` date DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_by` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Data Awal
@@ -432,6 +467,9 @@ INSERT INTO `settings` (`setting_key`, `setting_value`) VALUES
 ('rt_head_name', 'Nama Ketua RT Default'),
 ('log_cleanup_interval_days', '180'),
 ('whatsapp_notification_number', '');
+
+-- Data Awal untuk histori iuran, berlaku mulai dari tanggal tertentu sampai ada perubahan baru
+INSERT INTO `iuran_settings_history` (`monthly_fee`, `start_date`, `updated_by`) VALUES (50000.00, '2020-01-01', 1);
 INSERT INTO `users` (`username`, `password`, `nama_lengkap`, `role`) VALUES ('admin', '{$default_password_hash}', 'Administrator RT', 'admin');
 INSERT INTO `rumah` (`blok`, `nomor`, `pemilik`, `no_kk_penghuni`) VALUES ('A', '1', 'Budi Santoso', '3201010101010001');
 INSERT INTO `rumah` (`blok`, `nomor`, `pemilik`, `no_kk_penghuni`) VALUES ('A', '2', 'Siti Aminah', '3201010101010002');

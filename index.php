@@ -31,6 +31,7 @@ $router->get('/rumah/detail/(\d+)', 'pages/rumah_detail.php', ['auth', 'admin'])
 $router->get('/rumah/histori/cetak', 'pages/rumah_histori_cetak.php', ['auth', 'admin']);
 $router->get('/kegiatan', 'pages/kegiatan.php', ['auth']);
 $router->get('/settings', 'pages/settings.php', ['auth', 'admin']);
+$router->get('/settings/iuran-history', 'pages/iuran_histori_perubahan.php', ['auth', 'admin', 'bendahara']);
 $router->get('/galeri', 'pages/galeri.php', ['auth']);
 $router->get('/galeri/album/(\d+)', 'pages/galeri_album.php', ['auth']);
 $router->get('/pengumuman', 'pages/pengumuman.php', ['auth']);
@@ -39,6 +40,8 @@ $router->get('/laporan-keuangan/cetak', 'pages/laporan_keuangan_cetak.php', ['au
 $router->get('/aset', 'pages/aset.php', ['auth', 'admin']);
 $router->get('/laporan/iuran/cetak', 'pages/laporan_iuran_cetak.php', ['auth', 'admin', 'bendahara']);
 $router->get('/laporan/iuran', 'pages/laporan_iuran.php', ['auth', 'admin', 'bendahara']);
+$router->get('/laporan/iuran/statistik', 'pages/laporan_iuran_statistik.php', ['auth', 'admin', 'bendahara']);
+$router->get('/laporan-terpadu', 'pages/laporan_terpadu.php', ['auth', 'admin', 'bendahara']);
 $router->get('/laporan/surat', 'pages/laporan_surat.php', ['auth', 'admin']);
 $router->get('/laporan/surat/cetak', 'pages/laporan_surat_cetak.php', ['auth', 'admin']);
 $router->get('/dokumen', 'pages/dokumen.php', ['auth']);
@@ -54,6 +57,8 @@ $router->get('/my-profile/edit', 'pages/my_profile_edit.php', ['auth']);
 $router->get('/iuran-saya', 'pages/iuran_saya.php', ['auth']);
 $router->get('/keluarga-saya', 'pages/keluarga_saya.php', ['auth']);
 $router->get('/my-profile/change-password', 'pages/my_profile.php', ['auth']);
+$router->get('/manajemen', 'pages/manajemen.php', ['auth', 'admin', 'bendahara']);
+$router->get('/manajemen/kategori-kas', 'pages/manajemen_kategori.php', ['auth', 'admin', 'bendahara']);
 
 // --- Rute API (Untuk proses data via AJAX) ---
 // Rute ini akan dipanggil oleh JavaScript untuk mendapatkan, menambah, mengubah, dan menghapus data tanpa reload halaman.
@@ -79,6 +84,8 @@ $router->get('/keuangan', 'pages/keuangan.php', ['auth', 'bendahara']);
 $router->get('/api/kas', 'api/kas_handler.php', ['auth', 'bendahara']);
 $router->post('/api/kas/new', 'api/kas_handler.php', ['auth', 'bendahara']);
 $router->post('/api/kas/update', 'api/kas_handler.php', ['auth', 'bendahara']);
+$router->get('/api/kategori-kas', 'api/kategori_kas_handler.php', ['auth', 'bendahara']);
+$router->post('/api/kategori-kas', 'api/kategori_kas_handler.php', ['auth', 'bendahara']);
 $router->post('/api/kas/delete', 'api/kas_handler.php', ['auth', 'bendahara']);
 $router->get('/iuran', 'pages/iuran.php', ['auth', 'bendahara']);
 $router->get('/iuran/cetak', 'pages/iuran_cetak.php', ['auth', 'bendahara']);
@@ -101,6 +108,7 @@ $router->get('/api/dokumen', 'api/dokumen_handler.php', ['auth']);
 $router->post('/api/dokumen', 'api/dokumen_handler.php', ['auth', 'admin']);
 $router->get('/api/galeri', 'api/galeri_handler.php', ['auth']);
 $router->get('/api/laporan/iuran', 'api/laporan_iuran_handler.php', ['auth', 'admin', 'bendahara']);
+$router->get('/api/laporan/iuran/statistik', 'api/laporan_iuran_statistik_handler.php', ['auth', 'admin', 'bendahara']);
 $router->get('/api/laporan/iuran/export', 'api/laporan_iuran_export.php', ['auth', 'admin', 'bendahara']);
 $router->get('/api/booking', 'api/booking_handler.php', ['auth']);
 $router->post('/api/booking', 'api/booking_handler.php', ['auth']);
@@ -109,6 +117,8 @@ $router->post('/api/surat-pengantar', 'api/surat_pengantar_handler.php', ['auth'
 $router->get('/api/laporan/surat/export/excel', 'api/laporan_surat_export_excel.php', ['auth', 'admin']);
 $router->get('/api/surat-templates', 'api/surat_template_handler.php', ['auth']); // Warga needs to list them
 $router->post('/api/surat-templates', 'api/surat_template_handler.php', ['auth', 'admin']);
+$router->get('/api/aset', 'api/aset_handler.php', ['auth', 'admin']);
+$router->post('/api/aset', 'api/aset_handler.php', ['auth', 'admin']);
 $router->get('/api/panic-log', 'api/panic_log_handler.php', ['auth', 'admin']);
 $router->get('/api/anggaran', 'api/anggaran_handler.php', ['auth', 'bendahara']);
 $router->get('/api/log', 'api/log_handler.php', ['auth', 'admin']);
@@ -119,6 +129,7 @@ $router->post('/api/polling', 'api/polling_handler.php', ['auth']);
 $router->post('/api/panic', 'api/panic_handler.php', ['auth']);
 $router->get('/api/laporan-keuangan', 'api/laporan_keuangan_handler.php', ['auth']);
 $router->get('/api/my-profile', 'api/my_profile_edit_handler.php', ['auth']);
+$router->get('/api/global-search', 'api/global_search_handler.php', ['auth']);
 $router->get('/api/iuran-saya', 'api/iuran_saya_handler.php', ['auth']);
 $router->post('/api/my-profile', 'api/my_profile_edit_handler.php', ['auth']);
 $router->post('/api/my-profile/change-password', 'api/my_profile_handler.php', ['auth']);

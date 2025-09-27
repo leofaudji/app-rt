@@ -13,6 +13,25 @@ $role = $_SESSION['role'];
 
 try {
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+        $action = $_GET['action'] ?? 'get_all';
+
+        if ($action === 'get_fee_history') {
+            if ($role !== 'admin' && $role !== 'bendahara') {
+                throw new Exception("Akses ditolak. Hanya admin atau bendahara yang dapat melihat histori iuran.");
+            }
+            $query = "
+                SELECT h.*, u.nama_lengkap as updated_by_name 
+                FROM iuran_settings_history h
+                LEFT JOIN users u ON h.updated_by = u.id
+                ORDER BY h.start_date DESC
+            ";
+            $result = $conn->query($query);
+            $history = $result->fetch_all(MYSQLI_ASSOC);
+            echo json_encode(['status' => 'success', 'data' => $history]);
+            exit;
+        }
+
+        // Default GET action to fetch all settings
         $result = $conn->query("SELECT setting_key, setting_value FROM settings");
         $settings = [];
         while ($row = $result->fetch_assoc()) {
@@ -46,9 +65,49 @@ try {
 
         $conn->begin_transaction();
 
+        // --- Handle Iuran Bulanan Change ---
+        if (isset($_POST['monthly_fee']) && isset($_POST['fee_start_date'])) {
+            $new_fee = (float)$_POST['monthly_fee'];
+            $start_date_str = $_POST['fee_start_date'];
+            $user_id = $_SESSION['user_id'];
+
+            // Ambil iuran aktif saat ini
+            $stmt_current_fee = $conn->prepare("SELECT id, monthly_fee FROM iuran_settings_history WHERE end_date IS NULL ORDER BY start_date DESC LIMIT 1");
+            $stmt_current_fee->execute();
+            $current_fee_data = $stmt_current_fee->get_result()->fetch_assoc();
+            $stmt_current_fee->close();
+
+            // Hanya proses jika nominalnya berubah
+            if ($current_fee_data && (float)$current_fee_data['monthly_fee'] != $new_fee) {
+                $current_fee_id = $current_fee_data['id'];
+                $new_start_date = new DateTime($start_date_str);
+                
+                // Tanggal akhir untuk iuran lama adalah satu hari sebelum iuran baru dimulai
+                $end_date_for_old_fee = clone $new_start_date;
+                $end_date_for_old_fee->modify('-1 day');
+
+                // 1. Akhiri periode iuran lama
+                $stmt_end_old = $conn->prepare("UPDATE iuran_settings_history SET end_date = ? WHERE id = ?");
+                $stmt_end_old->bind_param("si", $end_date_for_old_fee->format('Y-m-d'), $current_fee_id);
+                $stmt_end_old->execute();
+                $stmt_end_old->close();
+
+                // 2. Buat record histori baru untuk iuran baru
+                $stmt_new_history = $conn->prepare("INSERT INTO iuran_settings_history (monthly_fee, start_date, updated_by) VALUES (?, ?, ?)");
+                $stmt_new_history->bind_param("dsi", $new_fee, $start_date_str, $user_id);
+                $stmt_new_history->execute();
+                $stmt_new_history->close();
+            }
+        }
+
         // Handle text fields
         $stmt = $conn->prepare("INSERT INTO settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
         foreach ($_POST as $key => $value) {
+            // Lewati field yang sudah ditangani secara khusus agar tidak diproses lagi
+            if (in_array($key, ['fee_start_date'])) {
+                continue;
+            }
+
             $stmt->bind_param("ss", $key, $value);
             $stmt->execute();
         }

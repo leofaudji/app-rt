@@ -17,6 +17,9 @@ if (!isset($_SESSION['role']) || !in_array($_SESSION['role'], ['admin', 'bendaha
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
     <h1 class="h2"><i class="bi bi-clipboard-data-fill"></i> Anggaran & Realisasi Belanja</h1>
     <div class="btn-toolbar mb-2 mb-md-0">
+        <a href="<?= base_url('/manajemen') ?>" class="btn btn-sm btn-outline-secondary me-2">
+            <i class="bi bi-arrow-left"></i> Kembali ke Manajemen
+        </a>
         <div class="btn-group me-2">
             <select id="anggaran-tahun-filter" class="form-select form-select-sm" style="width: auto;">
                 <!-- Options will be populated by JS -->

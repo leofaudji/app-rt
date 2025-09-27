@@ -3,6 +3,32 @@ require_once __DIR__ . '/Config.php';
 require_once __DIR__ . '/Database.php';
 require_once __DIR__ . '/functions.php';
 
+/**
+ * Mengambil nominal iuran yang berlaku untuk periode tertentu dari histori.
+ *
+ * @param int $tahun
+ * @param int $bulan
+ * @return float
+ */
+function get_fee_for_period($tahun, $bulan) {
+    $conn = Database::getInstance()->getConnection();
+    // Menggunakan hari pertama dari bulan yang diminta sebagai acuan
+    $date_for_period = "$tahun-$bulan-01";
+    
+    $stmt = $conn->prepare(
+        "SELECT monthly_fee FROM iuran_settings_history 
+         WHERE start_date <= ? AND (end_date IS NULL OR end_date >= ?)
+         ORDER BY start_date DESC LIMIT 1"
+    );
+    $stmt->bind_param("ss", $date_for_period, $date_for_period);
+    $stmt->execute();
+    $result = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    // Jika ada histori, gunakan itu. Jika tidak, fallback ke pengaturan umum.
+    return $result ? (float)$result['monthly_fee'] : (float)get_setting('monthly_fee', 50000);
+}
+
 // Define project root path for reliable file includes.
 if (!defined('PROJECT_ROOT')) {
     define('PROJECT_ROOT', dirname(__DIR__));

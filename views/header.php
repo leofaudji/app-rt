@@ -20,6 +20,9 @@ $log_cleanup_days = (int)($app_settings['log_cleanup_interval_days'] ?? 180);
     <title><?= $app_name ?></title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="<?= base_url('assets/css/style.css') ?>">
     <script>
         const userRole = '<?= $_SESSION['role'] ?? 'warga' ?>';
@@ -91,50 +94,9 @@ $log_cleanup_days = (int)($app_settings['log_cleanup_interval_days'] ?? 180);
 
         <!-- Manajemen Keuangan (Bendahara & Admin) -->
         <?php if (isset($_SESSION['role']) && in_array($_SESSION['role'], ['admin', 'bendahara'])): ?>
-            <li class="sidebar-header">Manajemen Keuangan</li>
+            <li class="sidebar-header">Pengurus</li>
             <li class="nav-item">
-                <a class="nav-link" href="<?= base_url('/keuangan') ?>"><i class="bi bi-cash-coin"></i> Kas RT</a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" href="<?= base_url('/iuran') ?>"><i class="bi bi-wallet2"></i> Iuran Warga</a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" href="<?= base_url('/anggaran') ?>"><i class="bi bi-clipboard-data-fill"></i> Anggaran</a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" href="<?= base_url('/laporan-keuangan') ?>"><i class="bi bi-graph-up"></i> Laporan Keuangan</a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" href="<?= base_url('/laporan/iuran') ?>"><i class="bi bi-person-x-fill"></i> Laporan Tunggakan</a>
-            </li>
-        <?php endif; ?>
-
-        <!-- Administrasi Sistem (Admin) -->
-        <?php if ($_SESSION['role'] === 'admin'): ?>
-            <li class="sidebar-header">Administrasi Sistem</li>
-            <li class="nav-item">
-                <a class="nav-link" href="<?= base_url('/warga') ?>"><i class="bi bi-people-fill"></i> Data Warga</a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" href="<?= base_url('/rumah') ?>"><i class="bi bi-house-fill"></i> Data Rumah</a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" href="<?= base_url('/users') ?>"><i class="bi bi-person-badge-fill"></i> Manajemen User</a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" href="<?= base_url('/aset') ?>"><i class="bi bi-box-seam-fill"></i> Inventaris Aset</a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" href="<?= base_url('/laporan/surat') ?>"><i class="bi bi-file-earmark-bar-graph-fill"></i> Laporan Surat</a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" href="<?= base_url('/log-aktivitas') ?>"><i class="bi bi-person-vcard"></i> Log Aktivitas</a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" href="<?= base_url('/log-panik') ?>"><i class="bi bi-exclamation-octagon-fill"></i> Log Tombol Panik</a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" href="<?= base_url('/settings') ?>"><i class="bi bi-gear-fill"></i> Pengaturan Sistem</a>
+                <a class="nav-link" href="<?= base_url('/manajemen') ?>"><i class="bi bi-kanban-fill"></i> Manajemen RT</a>
             </li>
         <?php endif; ?>
     </ul>
@@ -143,13 +105,22 @@ $log_cleanup_days = (int)($app_settings['log_cleanup_interval_days'] ?? 180);
 
 <div class="content-wrapper">
     <nav class="top-navbar d-flex justify-content-between align-items-center">
-        <button class="btn" id="sidebar-toggle-btn" title="Toggle sidebar">
-            <i class="bi bi-list fs-4"></i>
-        </button>
+        <!-- Left side: Sidebar Toggle -->
         <div class="d-flex align-items-center">
-            <div id="live-clock" class="text-muted small me-3 ms-auto fw-bold">
+            <button class="btn" id="sidebar-toggle-btn" title="Toggle sidebar">
+                <i class="bi bi-list fs-4"></i>
+            </button>
+        </div>
+
+        <!-- Right side: Clock, Search, Notifications, Profile -->
+        <div class="d-flex align-items-center">
+            <div id="live-clock" class="text-muted small me-3 fw-bold d-none d-md-block">
                 <!-- Clock will be inserted here by JavaScript -->
             </div>
+            <!-- Global Search Button -->
+            <button class="btn nav-link me-2" id="global-search-btn" data-bs-toggle="modal" data-bs-target="#globalSearchModal" title="Pencarian Global">
+                <i class="bi bi-search fs-5"></i>
+            </button>
             <!-- Panic Button -->
             <?php if (isset($_SESSION['role']) && $_SESSION['role'] === 'warga'): ?>
             <button class="btn btn-danger btn-lg me-3" id="panic-button" title="Tekan dan tahan selama 3 detik untuk mengirim sinyal darurat">
@@ -188,3 +159,24 @@ $log_cleanup_days = (int)($app_settings['log_cleanup_interval_days'] ?? 180);
     </nav>
 
     <main class="main-content">
+
+<!-- Global Search Modal -->
+<div class="modal fade" id="globalSearchModal" tabindex="-1" aria-labelledby="globalSearchModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="globalSearchModalLabel"><i class="bi bi-search"></i> Pencarian Global</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="input-group mb-3">
+            <input type="text" class="form-control form-control-lg" id="global-search-input" placeholder="Ketik untuk mencari warga, kegiatan, dokumen..." autocomplete="off">
+            <span class="input-group-text" id="global-search-spinner" style="display: none;"><div class="spinner-border spinner-border-sm"></div></span>
+        </div>
+        <div id="global-search-results">
+            <p class="text-muted text-center">Masukkan kata kunci untuk memulai pencarian.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

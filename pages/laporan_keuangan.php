@@ -1,4 +1,5 @@
 <?php
+$is_included = count(get_included_files()) > 1;
 $is_spa_request = isset($_SERVER['HTTP_X_SPA_REQUEST']) && $_SERVER['HTTP_X_SPA_REQUEST'] === 'true';
 if (!$is_spa_request) {
     require_once PROJECT_ROOT . '/views/header.php';
@@ -14,26 +15,40 @@ if (!isset($_SESSION['role']) || !in_array($_SESSION['role'], ['admin', 'bendaha
 }
 ?>
 
+<?php if (!$is_included): // Hanya tampilkan header jika file ini tidak di-include ?>
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
     <h1 class="h2"><i class="bi bi-graph-up"></i> Laporan Keuangan</h1>
     <div class="btn-toolbar mb-2 mb-md-0">
+        <a href="<?= base_url('/manajemen') ?>" class="btn btn-sm btn-outline-secondary me-2">
+            <i class="bi bi-arrow-left"></i> Kembali ke Manajemen
+        </a>
+<?php endif; ?>
         <div class="me-2">
             <label for="laporan-bulan-filter" class="form-label visually-hidden">Bulan</label>
             <select id="laporan-bulan-filter" class="form-select form-select-sm">
                 <!-- Options will be populated by JS -->
             </select>
         </div>
-        <div class="me-2">
+        <div class="me-2 me-md-3">
             <label for="laporan-tahun-filter" class="form-label visually-hidden">Tahun</label>
             <select id="laporan-tahun-filter" class="form-select form-select-sm">
+                <!-- Options will be populated by JS -->
+            </select>
+        </div>
+        <div class="me-2">
+            <label for="laporan-kategori-filter" class="form-label visually-hidden">Kategori</label>
+            <select id="laporan-kategori-filter" class="form-select form-select-sm">
+                <option value="">Semua Kategori</option>
                 <!-- Options will be populated by JS -->
             </select>
         </div>
         <button type="button" class="btn btn-sm btn-outline-primary" id="cetak-laporan-keuangan-btn">
             <i class="bi bi-printer-fill"></i> Cetak Laporan Bulanan
         </button>
+<?php if (!$is_included): ?>
     </div>
 </div>
+<?php endif; ?>
 
 <div class="row mb-4" id="monthly-summary-details-container">
     <div class="col-sm-6 col-lg-3 mb-3">
@@ -97,7 +112,7 @@ if (!isset($_SESSION['role']) || !in_array($_SESSION['role'], ['admin', 'bendaha
 </div>
 
 <?php
-if (!$is_spa_request) {
+if (!$is_spa_request && !$is_included) {
     require_once PROJECT_ROOT . '/views/footer.php';
 }
 ?>
