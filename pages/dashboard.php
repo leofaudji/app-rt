@@ -31,7 +31,7 @@ if (!$is_spa_request) {
 <div class="row">
     <!-- Card: Jumlah Warga -->
     <div class="col-lg-3 mb-4">
-        <div class="card text-white bg-primary h-100">
+        <div class="card text-white bg-primary h-100 shadow-sm">
             <div class="card-body pb-0">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
@@ -48,29 +48,49 @@ if (!$is_spa_request) {
     </div>
 
     <!-- Card: Saldo Kas -->
-    <div class="col-lg-5 mb-4">
-        <div class="card h-100">
+    <div class="col-lg-3 mb-4">
+        <div class="card h-100 shadow-sm">
             <div class="card-body">
-                <h5 class="card-title text-muted">Saldo & Tren Kas</h5>
+                <h6 class="card-subtitle text-muted">Saldo & Tren Kas RT</h6>
                 <div class="row align-items-center">
-                    <div class="col-md-5">
-                        <h2 class="fw-bold" id="saldo-kas-widget"><div class="spinner-border spinner-border-sm" role="status"></div></h2>
-                        <a href="<?= base_url('/keuangan') ?>" class="small">Lihat Detail Kas <i class="bi bi-arrow-right-circle"></i></a>
+                    <div class="col-12">
+                        <h4 class="fw-bold" id="saldo-kas-widget"><div class="spinner-border spinner-border-sm" role="status"></div></h4>
                     </div>
-                    <div class="col-md-7">
-                        <div style="position: relative; height:100px; width:100%">
+                    <div class="col-12">
+                        <div style="position: relative; height:60px; width:100%">
                             <canvas id="saldo-trend-mini-chart"></canvas>
                         </div>
                     </div>
                 </div>
+                <a href="<?= base_url('/keuangan') ?>" class="small stretched-link">Lihat Detail Kas</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card: Saldo Tabungan -->
+    <div class="col-lg-3 mb-4">
+        <div class="card h-100 shadow-sm">
+            <div class="card-body">
+                <h6 class="card-subtitle text-muted">Saldo & Tren Tabungan</h6>
+                <div class="row align-items-center">
+                    <div class="col-12">
+                        <h4 class="fw-bold" id="saldo-tabungan-widget"><div class="spinner-border spinner-border-sm" role="status"></div></h4>
+                    </div>
+                    <div class="col-12">
+                        <div style="position: relative; height:60px; width:100%">
+                            <canvas id="tabungan-trend-mini-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <a href="<?= base_url('/tabungan') ?>" class="small stretched-link">Lihat Detail Tabungan</a>
             </div>
         </div>
     </div>
 
     <!-- Card: Ringkasan Iuran -->
     <?php if (in_array($_SESSION['role'], ['admin', 'bendahara'])): ?>
-    <div class="col-lg-4 mb-4">
-        <div class="card text-white bg-info">
+    <div class="col-lg-3 mb-4">
+        <div class="card text-white bg-info shadow-sm">
             <div class="card-body pb-0">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>

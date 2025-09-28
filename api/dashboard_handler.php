@@ -25,6 +25,11 @@ try {
     $saldo = $result->fetch_assoc()['saldo'];
     $data['saldo_kas'] = 'Rp ' . number_format($saldo, 0, ',', '.');
 
+    // Saldo Tabungan Warga
+    $result_tabungan = $conn->query("SELECT SUM(CASE WHEN jenis = 'setor' THEN jumlah ELSE -jumlah END) as saldo FROM tabungan_warga");
+    $saldo_tabungan = $result_tabungan->fetch_assoc()['saldo'] ?? 0;
+    $data['saldo_tabungan'] = 'Rp ' . number_format($saldo_tabungan, 0, ',', '.');
+
     // --- Admin Tasks Widget Data ---
     $data['admin_tasks'] = [];
     if (in_array($_SESSION['role'], ['admin', 'bendahara'])) {
@@ -161,6 +166,41 @@ try {
         $trend_balances[] = $running_balance;
     }
     $data['saldo_trend'] = ['labels' => $trend_labels, 'data' => $trend_balances];
+
+    // --- Saldo Tabungan Trend (Last 6 Months) ---
+    $trend_labels_tabungan = [];
+    $trend_balances_tabungan = [];
+
+    // 1. Get the balance before this period
+    $stmt_saldo_awal_tabungan = $conn->prepare("SELECT SUM(CASE WHEN jenis = 'setor' THEN jumlah ELSE -jumlah END) as saldo FROM tabungan_warga WHERE tanggal < ?");
+    $stmt_saldo_awal_tabungan->bind_param("s", $start_date);
+    $stmt_saldo_awal_tabungan->execute();
+    $running_balance_tabungan = (float)($stmt_saldo_awal_tabungan->get_result()->fetch_assoc()['saldo'] ?? 0);
+    $stmt_saldo_awal_tabungan->close();
+
+    // 2. Get monthly deposits/withdrawals for the last 6 months
+    $stmt_trend_tabungan = $conn->prepare("
+        SELECT YEAR(tanggal) as tahun, MONTH(tanggal) as bulan,
+               SUM(CASE WHEN jenis = 'setor' THEN jumlah ELSE 0 END) as setoran,
+               SUM(CASE WHEN jenis = 'tarik' THEN jumlah ELSE 0 END) as penarikan
+        FROM tabungan_warga WHERE tanggal >= ?
+        GROUP BY YEAR(tanggal), MONTH(tanggal) ORDER BY tahun, bulan
+    ");
+    $stmt_trend_tabungan->bind_param("s", $start_date);
+    $stmt_trend_tabungan->execute();
+    $monthly_transactions_tabungan = $stmt_trend_tabungan->get_result()->fetch_all(MYSQLI_ASSOC);
+    $transactions_map_tabungan = [];
+    foreach ($monthly_transactions_tabungan as $tx) { $transactions_map_tabungan["{$tx['tahun']}-{$tx['bulan']}"] = $tx; }
+    $stmt_trend_tabungan->close();
+
+    // 3. Calculate running balance for each of the last 6 months
+    for ($i = 5; $i >= 0; $i--) {
+        $date = new DateTime("first day of -$i months");
+        $key = $date->format('Y-n');
+        if (isset($transactions_map_tabungan[$key])) { $running_balance_tabungan += (float)$transactions_map_tabungan[$key]['setoran'] - (float)$transactions_map_tabungan[$key]['penarikan']; }
+        $trend_balances_tabungan[] = $running_balance_tabungan;
+    }
+    $data['saldo_tabungan_trend'] = ['labels' => $trend_labels, 'data' => $trend_balances_tabungan];
 
     // --- New Residents Widget ---
     $stmt_warga_baru = $conn->query("

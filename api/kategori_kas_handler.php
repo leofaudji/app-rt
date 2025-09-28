@@ -78,6 +78,59 @@ try {
                 echo json_encode(['status' => 'success', 'message' => 'Kategori berhasil dihapus.']);
                 break;
 
+            case 'delete':
+                $id = (int)($_POST['id'] ?? 0);
+                if (empty($id)) {
+                    throw new Exception("ID kategori tidak valid.");
+                }
+
+                // Ambil nama kategori terlebih dahulu
+                $stmt_get_name = $conn->prepare("SELECT nama_kategori FROM kas_kategori WHERE id = ?");
+                $stmt_get_name->bind_param("i", $id);
+                $stmt_get_name->execute();
+                $category = $stmt_get_name->get_result()->fetch_assoc();
+                $stmt_get_name->close();
+
+                if (!$category) {
+                    throw new Exception("Kategori yang akan dihapus tidak ditemukan.");
+                }
+                $nama_kategori = $category['nama_kategori'];
+
+                // Cek apakah kategori sudah digunakan di tabel kas
+                $stmt_check = $conn->prepare("SELECT COUNT(id) as usage_count FROM kas WHERE kategori = ?");
+                $stmt_check->bind_param("s", $nama_kategori);
+                $stmt_check->execute();
+                $usage_count = $stmt_check->get_result()->fetch_assoc()['usage_count'];
+                $stmt_check->close();
+
+                if ($usage_count > 0) {
+                    throw new Exception("Kategori '{$nama_kategori}' tidak dapat dihapus karena telah digunakan dalam {$usage_count} transaksi.");
+                }
+
+                // Jika tidak digunakan, lanjutkan penghapusan
+                $stmt_delete = $conn->prepare("DELETE FROM kas_kategori WHERE id = ?");
+                $stmt_delete->bind_param("i", $id);
+                $stmt_delete->execute();
+                $stmt_delete->close();
+
+                log_activity($_SESSION['username'], 'Hapus Kategori Kas', "Menghapus kategori kas ID: {$id} ({$nama_kategori})");
+                echo json_encode(['status' => 'success', 'message' => 'Kategori berhasil dihapus.']);
+                break;
+
+            case 'get_single':
+                $id = (int)($_POST['id'] ?? 0);
+                if (empty($id)) {
+                    throw new Exception("ID kategori tidak valid.");
+                }
+                $stmt = $conn->prepare("SELECT * FROM kas_kategori WHERE id = ?");
+                $stmt->bind_param("i", $id);
+                $stmt->execute();
+                $kategori = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+
+                echo json_encode(['status' => 'success', 'data' => $kategori]);
+                break;
+
             default:
                 throw new Exception("Aksi tidak valid.");
         }

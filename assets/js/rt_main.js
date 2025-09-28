@@ -210,6 +210,9 @@ function runPageScripts(path) {
     else if (cleanPath === '/iuran-saya') {
         initIuranSayaPage();
     }
+    else if (cleanPath === '/tabungan-saya') {
+        initTabunganSayaPage();
+    }
     else if (cleanPath === '/keluarga-saya') {
         initKeluargaSayaPage();
     }
@@ -267,8 +270,17 @@ function runPageScripts(path) {
     else if (cleanPath === '/manajemen') {
         initManajemenPage();
     }
-    else if (cleanPath === '/my-profile/edit') {
-        initMyProfileEditPage();
+    else if (cleanPath === '/tabungan') {
+        initTabunganPage();
+    }
+    else if (cleanPath.startsWith('/tabungan/detail/')) {
+        initTabunganDetailPage();
+    }
+    else if (cleanPath === '/manajemen/kategori-kas') {
+        initManajemenKategoriPage();
+    }
+    else if (cleanPath === '/manajemen/kategori-tabungan') {
+        initManajemenKategoriTabunganPage();
     }
 }
 
@@ -296,6 +308,7 @@ function initManajemenPage() {
 function initDashboardPage() {
     const totalWargaWidget = document.getElementById('total-warga-widget');
     const saldoKasWidget = document.getElementById('saldo-kas-widget');
+    const saldoTabunganWidget = document.getElementById('saldo-tabungan-widget');
     const rumahStatusChartCanvas = document.getElementById('rumah-status-chart');
     const birthdayWidgetList = document.getElementById('birthday-widget-list');
     const latestAnnouncementsWidget = document.getElementById('latest-announcements-widget');
@@ -307,8 +320,9 @@ function initDashboardPage() {
     const newResidentsWidget = document.getElementById('new-residents-widget');
     const iuranProgressBar = document.getElementById('iuran-progress-bar');
     const saldoTrendMiniChartCanvas = document.getElementById('saldo-trend-mini-chart');
+    const tabunganTrendMiniChartCanvas = document.getElementById('tabungan-trend-mini-chart');
     const iuranMenunggakWidget = document.getElementById('iuran-menunggak-widget');
-    let rumahStatusChart, demographicsChart, kasMonthlyChart, saldoTrendMiniChart;
+    let rumahStatusChart, demographicsChart, kasMonthlyChart, saldoTrendMiniChart, tabunganTrendMiniChart;
 
     const bulanFilter = document.getElementById('dashboard-bulan-filter');
     const tahunFilter = document.getElementById('dashboard-tahun-filter');
@@ -339,7 +353,7 @@ function initDashboardPage() {
 
     async function fetchDashboardData(bulan, tahun) {
         // Show spinners
-        const spinners = [totalWargaWidget, saldoKasWidget, iuranSummaryWidget, birthdayWidgetList, latestAnnouncementsWidget, upcomingActivitiesWidget, adminTasksWidget, newResidentsWidget, iuranMenunggakWidget];
+        const spinners = [totalWargaWidget, saldoKasWidget, saldoTabunganWidget, iuranSummaryWidget, birthdayWidgetList, latestAnnouncementsWidget, upcomingActivitiesWidget, adminTasksWidget, newResidentsWidget, iuranMenunggakWidget];
         spinners.forEach(el => {
             if (el) {
                 const spinnerHtml = el.tagName === 'UL' || el.tagName === 'DIV' ? '<div class="text-center"><div class="spinner-border spinner-border-sm"></div></div>' : '<div class="spinner-border spinner-border-sm"></div>';
@@ -355,6 +369,7 @@ function initDashboardPage() {
                 const data = result.data;
                 if (totalWargaWidget) totalWargaWidget.textContent = data.total_warga;
                 if (saldoKasWidget) saldoKasWidget.textContent = data.saldo_kas;
+                if (saldoTabunganWidget) saldoTabunganWidget.textContent = data.saldo_tabungan;
 
                 if (rumahStatusChartCanvas && data.status_rumah) {
                     if (rumahStatusChart) {
@@ -503,6 +518,47 @@ function initDashboardPage() {
                         }
                     });
                 }
+                if (tabunganTrendMiniChartCanvas && data.saldo_tabungan_trend) {
+                    if (tabunganTrendMiniChart) {
+                        tabunganTrendMiniChart.destroy();
+                    }
+                    const ctx = tabunganTrendMiniChartCanvas.getContext('2d');
+                    tabunganTrendMiniChart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: data.saldo_tabungan_trend.labels,
+                            datasets: [{
+                                label: 'Saldo Tabungan',
+                                data: data.saldo_tabungan_trend.data,
+                                fill: true,
+                                backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                                borderColor: 'rgba(13, 110, 253, 1)',
+                                tension: 0.3,
+                                pointRadius: 0,
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: { y: { display: false }, x: { display: false } },
+                            plugins: {
+                                legend: { display: false },
+                                tooltip: {
+                                    mode: 'index',
+                                    intersect: false,
+                                    callbacks: {
+                                        label: function(context) {
+                                            let label = context.dataset.label || '';
+                                            if (label) { label += ': '; }
+                                            if (context.parsed.y !== null) { label += new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(context.parsed.y); }
+                                            return label;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
                 if (iuranSummaryWidget && data.iuran_summary) {
                     const summary = data.iuran_summary;
                     iuranSummaryWidget.innerHTML = `<h2 class="fw-bold">${summary.kk_lunas} / ${summary.total_kk} KK Lunas</h2>`;
@@ -612,7 +668,7 @@ function initDashboardPage() {
             }
         } catch (error) {
             console.error('Error loading dashboard data:', error);
-            [totalWargaWidget, saldoKasWidget].forEach(el => { if (el) el.textContent = 'Error' });
+            [totalWargaWidget, saldoKasWidget, saldoTabunganWidget].forEach(el => { if (el) el.textContent = 'Error' });
             if (birthdayWidgetList) birthdayWidgetList.innerHTML = '<li class="list-group-item text-danger">Gagal memuat.</li>';
             if (latestAnnouncementsWidget) latestAnnouncementsWidget.innerHTML = '<p class="text-danger mb-0">Gagal memuat.</p>';
             if (upcomingActivitiesWidget) upcomingActivitiesWidget.innerHTML = '<p class="text-danger mb-0">Gagal memuat.</p>';
@@ -1134,7 +1190,7 @@ function initKeuanganPage() {
     const kasModalEl = document.getElementById('kasModal');
     const kasModal = new bootstrap.Modal(kasModalEl);
     const kasForm = document.getElementById('kas-form');
-    const saveKasBtn = document.getElementById('save-kas-btn');
+    const saveKasBtn = document.getElementById('save-transaksi-kas-btn'); // Changed ID to be more specific
     const limitSelect = document.getElementById('kas-limit');
     const paginationContainer = document.getElementById('kas-pagination');
     const jenisSelectModal = document.getElementById('jenis');
@@ -3174,6 +3230,501 @@ function initKeluargaSayaPage() {
     loadMyFamily();
 }
 
+function initTabunganSayaPage() {
+    const container = document.getElementById('tabungan-saya-container');
+    if (!container) return;
+
+    const saldoEl = document.getElementById('saldo-saya-total');
+    const tableBody = document.getElementById('tabungan-saya-table-body');
+    const goalsContainer = document.getElementById('savings-goals-container');
+    const goalModal = new bootstrap.Modal(document.getElementById('goalModal'));
+    const printBtn = document.getElementById('cetak-tabungan-saya-btn');
+    const currencyFormatter = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 });
+
+    async function loadMySavings() {
+        saldoEl.innerHTML = '<div class="spinner-border spinner-border-sm"></div>';
+        if (printBtn) printBtn.classList.add('disabled');
+        tableBody.innerHTML = '<tr><td colspan="5" class="text-center p-5"><div class="spinner-border"></div></td></tr>';
+
+        try {
+            // We need to get the warga_id of the current user first.
+            const profileRes = await fetch(`${basePath}/api/my-profile`);
+            const profileResult = await profileRes.json();
+            if (profileResult.status !== 'success' || !profileResult.data.warga_id) {
+                 throw new Error("Profil warga tidak ditemukan. Tidak dapat memuat tabungan.");
+            }
+            const wargaId = profileResult.data.warga_id;
+
+            const response = await fetch(`${basePath}/api/tabungan?action=detail&warga_id=${wargaId}`);
+            const result = await response.json();
+
+            if (result.status === 'success') {
+                if (printBtn) {
+                    printBtn.href = `${basePath}/tabungan/cetak/${wargaId}`;
+                    printBtn.classList.remove('disabled');
+                }
+
+                saldoEl.textContent = currencyFormatter.format(result.data.saldo);
+                renderGoals(result.data.goals, result.data.saldo);
+                tableBody.innerHTML = '';
+                if (result.data.transactions.length > 0) {
+                    result.data.transactions.forEach(tx => {
+                        const row = `
+                            <tr>
+                                <td>${new Date(tx.tanggal).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}</td>
+                                <td><span class="badge bg-${tx.jenis === 'setor' ? 'success' : 'danger'}">${tx.jenis}</span></td>
+                                <td>${tx.nama_kategori}</td>
+                                <td>${tx.keterangan || '-'}</td>
+                                <td class="text-end">${currencyFormatter.format(tx.jumlah)}</td>
+                            </tr>
+                        `;
+                        tableBody.insertAdjacentHTML('beforeend', row);
+                    });
+                } else {
+                    tableBody.innerHTML = '<tr><td colspan="5" class="text-center">Belum ada riwayat transaksi.</td></tr>';
+                }
+            } else {
+                throw new Error(result.message);
+            }
+        } catch (error) {
+            saldoEl.textContent = 'Error';
+            tableBody.innerHTML = `<tr><td colspan="5" class="text-center text-danger">Gagal memuat data: ${error.message}</td></tr>`;
+        }
+    }
+
+    function renderGoals(goals, currentBalance) {
+        goalsContainer.innerHTML = '';
+        if (goals.length > 0) {
+            goals.forEach(goal => {
+                const progress = Math.min((currentBalance / goal.target_jumlah) * 100, 100);
+                const isAchieved = progress >= 100;
+                const targetDate = goal.tanggal_target ? `Target: ${new Date(goal.tanggal_target).toLocaleDateString('id-ID', {day:'numeric', month:'long', year:'numeric'})}` : 'Tanpa batas waktu';
+
+                const goalCard = `
+                    <div class="col-md-6 col-lg-4 mb-4">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <h5 class="card-title">${goal.nama_goal}</h5>
+                                    <div class="dropdown">
+                                        <button class="btn btn-sm btn-light" type="button" data-bs-toggle="dropdown"><i class="bi bi-three-dots-vertical"></i></button>
+                                        <ul class="dropdown-menu">
+                                            <li><a class="dropdown-item edit-goal-btn" href="#" data-goal='${JSON.stringify(goal)}'>Edit</a></li>
+                                            <li><a class="dropdown-item text-danger delete-goal-btn" href="#" data-id="${goal.id}" data-nama="${goal.nama_goal}">Hapus</a></li>
+                                        </ul>
+                                    </div>
+                                </div>
+                                <p class="card-text text-muted small">${targetDate}</p>
+                                <p class="fw-bold">${currencyFormatter.format(goal.target_jumlah)}</p>
+                                <div class="progress" role="progressbar" style="height: 20px;">
+                                    <div class="progress-bar ${isAchieved ? 'bg-success' : 'bg-primary'}" style="width: ${progress}%">${progress.toFixed(0)}%</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                goalsContainer.insertAdjacentHTML('beforeend', goalCard);
+            });
+        } else {
+            goalsContainer.innerHTML = '<div class="col-12"><div class="alert alert-info text-center">Anda belum memiliki target tabungan.</div></div>';
+        }
+    }
+
+    document.getElementById('goalModal').addEventListener('show.bs.modal', (e) => {
+        const button = e.relatedTarget;
+        const form = document.getElementById('goal-form');
+        form.reset();
+        if (button && button.dataset.action === 'add') {
+            document.getElementById('goalModalLabel').textContent = 'Tambah Target Tabungan';
+            document.getElementById('goal-action').value = 'add_goal';
+        }
+    });
+
+    document.getElementById('save-goal-btn').addEventListener('click', async () => {
+        const form = document.getElementById('goal-form');
+        const formData = new FormData(form);
+        const response = await fetch(`${basePath}/api/tabungan`, { method: 'POST', body: formData });
+        const result = await response.json();
+        showToast(result.message, result.status === 'success' ? 'success' : 'error');
+        if (result.status === 'success') {
+            goalModal.hide();
+            loadMySavings();
+        }
+    });
+
+    goalsContainer.addEventListener('click', async (e) => {
+        const editBtn = e.target.closest('.edit-goal-btn');
+        if (editBtn) {
+            e.preventDefault();
+            const goal = JSON.parse(editBtn.dataset.goal);
+            document.getElementById('goalModalLabel').textContent = 'Edit Target Tabungan';
+            document.getElementById('goal-action').value = 'update_goal';
+            document.getElementById('goal-id').value = goal.id;
+            document.getElementById('nama_goal').value = goal.nama_goal;
+            document.getElementById('target_jumlah').value = goal.target_jumlah;
+            document.getElementById('tanggal_target').value = goal.tanggal_target;
+            goalModal.show();
+        }
+    });
+
+    loadMySavings();
+}
+
+function initTabunganPage() {
+    const tableBody = document.getElementById('tabungan-summary-table-body');
+    const searchInput = document.getElementById('search-tabungan');
+    const totalSaldoEl = document.getElementById('total-semua-saldo');
+    if (!tableBody) return;
+
+    const currencyFormatter = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 });
+
+    async function loadSummary(searchTerm = '') {
+        tableBody.innerHTML = '<tr><td colspan="5" class="text-center p-5"><div class="spinner-border"></div></td></tr>';
+        totalSaldoEl.innerHTML = '<div class="spinner-border spinner-border-sm"></div>';
+        try {
+            const response = await fetch(`${basePath}/api/tabungan?action=summary&search=${encodeURIComponent(searchTerm)}`);
+            const result = await response.json();
+
+            if (result.status === 'success') {
+                tableBody.innerHTML = '';
+                let totalSaldo = 0;
+                if (result.data.length > 0) {
+                    result.data.forEach(item => {
+                        const saldo = parseFloat(item.saldo) || 0;
+                        totalSaldo += saldo;
+                        const row = `
+                            <tr>
+                                <td>${item.nama_lengkap}</td>
+                                <td>${item.no_kk}</td>
+                                <td>Blok ${item.blok} / ${item.nomor}</td>
+                                <td class="text-end fw-bold">${currencyFormatter.format(saldo)}</td>
+                                <td class="text-end">
+                                    <a href="${basePath}/tabungan/detail/${item.warga_id}" class="btn btn-sm btn-info">
+                                        <i class="bi bi-search"></i> Detail
+                                    </a>
+                                </td>
+                            </tr>
+                        `;
+                        tableBody.insertAdjacentHTML('beforeend', row);
+                    });
+                } else {
+                    tableBody.innerHTML = '<tr><td colspan="5" class="text-center">Tidak ada data tabungan ditemukan.</td></tr>';
+                }
+                totalSaldoEl.textContent = currencyFormatter.format(totalSaldo);
+            } else {
+                throw new Error(result.message);
+            }
+        } catch (error) {
+            tableBody.innerHTML = `<tr><td colspan="5" class="text-center text-danger">Gagal memuat data.</td></tr>`;
+            totalSaldoEl.textContent = 'Error';
+        }
+    }
+
+    let debounceTimer;
+    searchInput.addEventListener('input', () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => loadSummary(searchInput.value), 300);
+    });
+
+    loadSummary();
+}
+
+function initTabunganDetailPage() {
+    const container = document.getElementById('tabungan-detail-container');
+    if (!container) return;
+
+    const wargaId = container.dataset.wargaId;
+    const namaEl = document.getElementById('detail-warga-nama');
+    const saldoEl = document.getElementById('detail-saldo-total');
+    const tableBody = document.getElementById('tabungan-detail-table-body');
+    const modalEl = document.getElementById('tabunganTxModal');
+    const modal = new bootstrap.Modal(modalEl);
+    const form = document.getElementById('tabungan-tx-form');
+    const saveBtn = document.getElementById('save-tabungan-tx-btn');
+    const jenisSelect = document.getElementById('tx-jenis');
+    const kategoriSelect = document.getElementById('tx-kategori');
+
+    const currencyFormatter = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 });
+
+    async function loadDetail() {
+        namaEl.innerHTML = '<div class="spinner-border spinner-border-sm"></div>';
+        saldoEl.innerHTML = '<div class="spinner-border spinner-border-sm"></div>';
+        tableBody.innerHTML = '<tr><td colspan="7" class="text-center p-5"><div class="spinner-border"></div></td></tr>';
+
+        try {
+            const response = await fetch(`${basePath}/api/tabungan?action=detail&warga_id=${wargaId}`);
+            const result = await response.json();
+            if (result.status === 'success') {
+                const { warga, transactions, saldo } = result.data;
+                namaEl.textContent = `${warga.nama_lengkap} (KK: ${warga.no_kk})`;
+                saldoEl.textContent = currencyFormatter.format(saldo);
+                tableBody.innerHTML = '';
+                if (transactions.length > 0) {
+                    transactions.forEach(tx => {
+                        const row = `
+                            <tr>
+                                <td>${new Date(tx.tanggal).toLocaleDateString('id-ID')}</td>
+                                <td><span class="badge bg-${tx.jenis === 'setor' ? 'success' : 'danger'}">${tx.jenis}</span></td>
+                                <td>${tx.nama_kategori}</td>
+                                <td>${tx.keterangan || '-'}</td>
+                                <td class="text-end">${currencyFormatter.format(tx.jumlah)}</td>
+                                <td>${tx.pencatat}</td>
+                                <td class="text-end">
+                                    <button class="btn btn-sm btn-danger delete-btn" data-id="${tx.id}" title="Hapus"><i class="bi bi-trash-fill"></i></button>
+                                </td>
+                            </tr>
+                        `;
+                        tableBody.insertAdjacentHTML('beforeend', row);
+                    });
+                } else {
+                    tableBody.innerHTML = '<tr><td colspan="7" class="text-center">Belum ada transaksi.</td></tr>';
+                }
+            } else { throw new Error(result.message); }
+        } catch (error) {
+            namaEl.textContent = 'Error';
+            saldoEl.textContent = 'Error';
+            tableBody.innerHTML = `<tr><td colspan="7" class="text-center text-danger">Gagal memuat: ${error.message}</td></tr>`;
+        }
+    }
+
+    async function loadKategoriOptions(jenis) {
+        kategoriSelect.innerHTML = '<option>Memuat...</option>';
+        const response = await fetch(`${basePath}/api/tabungan-kategori`);
+        const result = await response.json();
+        kategoriSelect.innerHTML = '';
+        if (result.status === 'success' && result.data[jenis]) {
+            result.data[jenis].forEach(cat => kategoriSelect.add(new Option(cat.nama_kategori, cat.id)));
+        }
+    }
+
+    modalEl.addEventListener('show.bs.modal', () => {
+        form.reset();
+        document.getElementById('tx-tanggal').valueAsDate = new Date();
+        loadKategoriOptions(jenisSelect.value);
+    });
+
+    jenisSelect.addEventListener('change', () => loadKategoriOptions(jenisSelect.value));
+
+    saveBtn.addEventListener('click', async () => {
+        const formData = new FormData(form);
+        const response = await fetch(`${basePath}/api/tabungan`, { method: 'POST', body: formData });
+        const result = await response.json();
+        showToast(result.message, result.status === 'success' ? 'success' : 'error');
+        if (result.status === 'success') {
+            modal.hide();
+            loadDetail();
+        }
+    });
+
+    tableBody.addEventListener('click', async (e) => {
+        const deleteBtn = e.target.closest('.delete-btn');
+        if (deleteBtn) {
+            if (confirm('Yakin ingin menghapus transaksi ini? Saldo akan dihitung ulang.')) {
+                const formData = new FormData();
+                formData.append('action', 'delete_transaction');
+                formData.append('id', deleteBtn.dataset.id);
+                const response = await fetch(`${basePath}/api/tabungan`, { method: 'POST', body: formData });
+                const result = await response.json();
+                showToast(result.message, result.status === 'success' ? 'success' : 'error');
+                if (result.status === 'success') loadDetail();
+            }
+        }
+    });
+
+    loadDetail();
+}
+
+function initManajemenKategoriPage() {
+    const tableBodyMasuk = document.getElementById('kategori-masuk-table-body');
+    const tableBodyKeluar = document.getElementById('kategori-keluar-table-body');
+    const modalEl = document.getElementById('kategoriKasModal');
+    const modal = new bootstrap.Modal(modalEl);
+    const form = document.getElementById('kategori-kas-form');
+    const saveBtn = document.getElementById('save-kategori-btn');
+
+    if (!tableBodyMasuk || !tableBodyKeluar) return;
+
+    async function loadKategori() {
+        tableBodyMasuk.innerHTML = '<tr><td colspan="2" class="text-center p-4"><div class="spinner-border spinner-border-sm"></div></td></tr>';
+        tableBodyKeluar.innerHTML = '<tr><td colspan="2" class="text-center p-4"><div class="spinner-border spinner-border-sm"></div></td></tr>';
+
+        try {
+            const response = await fetch(`${basePath}/api/kategori-kas`);
+            const result = await response.json();
+
+            if (result.status === 'success') {
+                renderTable(tableBodyMasuk, result.data.masuk);
+                renderTable(tableBodyKeluar, result.data.keluar);
+            } else {
+                throw new Error(result.message);
+            }
+        } catch (error) {
+            tableBodyMasuk.innerHTML = '<tr><td colspan="2" class="text-center text-danger">Gagal memuat.</td></tr>';
+            tableBodyKeluar.innerHTML = '<tr><td colspan="2" class="text-center text-danger">Gagal memuat.</td></tr>';
+        }
+    }
+
+    function renderTable(tbody, data) {
+        tbody.innerHTML = '';
+        if (data && data.length > 0) {
+            data.forEach(item => {
+                const row = `
+                    <tr>
+                        <td>${item.nama_kategori}</td>
+                        <td class="text-end">
+                            <button class="btn btn-sm btn-info edit-btn" data-id="${item.id}" title="Edit"><i class="bi bi-pencil-fill"></i></button>
+                            <button class="btn btn-sm btn-danger delete-btn" data-id="${item.id}" data-nama="${item.nama_kategori}" title="Hapus"><i class="bi bi-trash-fill"></i></button>
+                        </td>
+                    </tr>
+                `;
+                tbody.insertAdjacentHTML('beforeend', row);
+            });
+        } else {
+            tbody.innerHTML = '<tr><td colspan="2" class="text-center text-muted">Belum ada kategori.</td></tr>';
+        }
+    }
+
+    modalEl.addEventListener('show.bs.modal', (e) => {
+        const button = e.relatedTarget;
+        form.reset();
+        document.getElementById('kategori-action').value = 'add';
+        document.getElementById('kategori-id').value = '';
+        document.getElementById('kategoriKasModalLabel').textContent = 'Tambah Kategori Baru';
+        
+        // Set jenis based on which "Tambah" button was clicked
+        if (button && button.dataset.jenis) {
+            document.getElementById('kategori-jenis').value = button.dataset.jenis;
+        }
+    });
+
+    saveBtn.addEventListener('click', async () => {
+        const formData = new FormData(form);
+        const response = await fetch(`${basePath}/api/kategori-kas`, { method: 'POST', body: formData });
+        const result = await response.json();
+        showToast(result.message, result.status === 'success' ? 'success' : 'error');
+        if (result.status === 'success') {
+            modal.hide();
+            loadKategori();
+        }
+    });
+
+    document.getElementById('kategori-tables-container').addEventListener('click', async (e) => {
+        const editBtn = e.target.closest('.edit-btn');
+        if (editBtn) {
+            const id = editBtn.dataset.id;
+            const formData = new FormData();
+            formData.append('action', 'get_single');
+            formData.append('id', id); // This line is correct, but the URL below was wrong
+            const response = await fetch(`${basePath}/api/kategori-kas`, { method: 'POST', body: formData });
+            const result = await response.json();
+            if (result.status === 'success') {
+                document.getElementById('kategoriKasModalLabel').textContent = 'Edit Kategori';
+                document.getElementById('kategori-action').value = 'update';
+                document.getElementById('kategori-id').value = result.data.id;
+                document.getElementById('nama_kategori').value = result.data.nama_kategori;
+                document.getElementById('kategori-jenis').value = result.data.jenis;
+                modal.show();
+            }
+        }
+
+        const deleteBtn = e.target.closest('.delete-btn');
+        if (deleteBtn) {
+            const { id, nama } = deleteBtn.dataset;
+            if (confirm(`Yakin ingin menghapus kategori "${nama}"?`)) {
+                const formData = new FormData();
+                formData.append('action', 'delete');
+                formData.append('id', id);
+                const response = await fetch(`${basePath}/api/kategori-kas`, { method: 'POST', body: formData });
+                const result = await response.json();
+                showToast(result.message, result.status === 'success' ? 'success' : 'error');
+                if (result.status === 'success') loadKategori();
+            }
+        }
+    });
+
+    loadKategori();
+}
+
+function initManajemenKategoriTabunganPage() {
+    const tableBodySetor = document.getElementById('kategori-setor-table-body');
+    const tableBodyTarik = document.getElementById('kategori-tarik-table-body');
+    const modalEl = document.getElementById('kategoriTabunganModal');
+    const modal = new bootstrap.Modal(modalEl);
+    const form = document.getElementById('kategori-tabungan-form');
+    const saveBtn = document.getElementById('save-kategori-btn');
+
+    if (!tableBodySetor || !tableBodyTarik) return;
+
+    async function loadKategori() {
+        tableBodySetor.innerHTML = '<tr><td colspan="2" class="text-center p-4"><div class="spinner-border spinner-border-sm"></div></td></tr>';
+        tableBodyTarik.innerHTML = '<tr><td colspan="2" class="text-center p-4"><div class="spinner-border spinner-border-sm"></div></td></tr>';
+
+        try {
+            const response = await fetch(`${basePath}/api/tabungan-kategori`);
+            const result = await response.json();
+            if (result.status === 'success') {
+                renderTable(tableBodySetor, result.data.setor);
+                renderTable(tableBodyTarik, result.data.tarik);
+            } else { throw new Error(result.message); }
+        } catch (error) {
+            tableBodySetor.innerHTML = '<tr><td colspan="2" class="text-center text-danger">Gagal memuat.</td></tr>';
+            tableBodyTarik.innerHTML = '<tr><td colspan="2" class="text-center text-danger">Gagal memuat.</td></tr>';
+        }
+    }
+
+    function renderTable(tbody, data) {
+        tbody.innerHTML = '';
+        if (data && data.length > 0) {
+            data.forEach(item => {
+                const row = `<tr><td>${item.nama_kategori}</td><td class="text-end"><button class="btn btn-sm btn-info edit-btn" data-id="${item.id}"><i class="bi bi-pencil-fill"></i></button> <button class="btn btn-sm btn-danger delete-btn" data-id="${item.id}" data-nama="${item.nama_kategori}"><i class="bi bi-trash-fill"></i></button></td></tr>`;
+                tbody.insertAdjacentHTML('beforeend', row);
+            });
+        } else {
+            tbody.innerHTML = '<tr><td colspan="2" class="text-center text-muted">Belum ada kategori.</td></tr>';
+        }
+    }
+
+    modalEl.addEventListener('show.bs.modal', (e) => {
+        const button = e.relatedTarget;
+        form.reset();
+        document.getElementById('kategori-action').value = 'add';
+        document.getElementById('kategori-id').value = '';
+        document.getElementById('kategoriTabunganModalLabel').textContent = 'Tambah Kategori Baru';
+        if (button && button.dataset.jenis) {
+            document.getElementById('kategori-jenis').value = button.dataset.jenis;
+        }
+    });
+
+    saveBtn.addEventListener('click', async () => {
+        const formData = new FormData(form);
+        const response = await fetch(`${basePath}/api/tabungan-kategori`, { method: 'POST', body: formData });
+        const result = await response.json();
+        showToast(result.message, result.status === 'success' ? 'success' : 'error');
+        if (result.status === 'success') { modal.hide(); loadKategori(); }
+    });
+
+    document.getElementById('kategori-tabungan-tables-container').addEventListener('click', async (e) => {
+        const editBtn = e.target.closest('.edit-btn');
+        if (editBtn) { /* Logic for edit is similar to kas, can be added if needed */ }
+
+        const deleteBtn = e.target.closest('.delete-btn');
+        if (deleteBtn) {
+            const { id, nama } = deleteBtn.dataset;
+            if (confirm(`Yakin ingin menghapus kategori "${nama}"?`)) {
+                const formData = new FormData();
+                formData.append('action', 'delete');
+                formData.append('id', id);
+                const response = await fetch(`${basePath}/api/tabungan-kategori`, { method: 'POST', body: formData });
+                const result = await response.json();
+                showToast(result.message, result.status === 'success' ? 'success' : 'error');
+                if (result.status === 'success') loadKategori();
+            }
+        }
+    });
+
+    loadKategori();
+}
+
 function initAnggaranPage() {
     const yearFilter = document.getElementById('anggaran-tahun-filter');
     const reportTableBody = document.getElementById('anggaran-report-table-body');
@@ -4833,6 +5384,7 @@ function initPengumumanPage() {
 function initLaporanKeuanganPage() {
     const yearFilter = document.getElementById('laporan-tahun-filter');
     const monthFilter = document.getElementById('laporan-bulan-filter');
+    const categoryFilter = document.getElementById('laporan-kategori-filter');
     const printBtn = document.getElementById('cetak-laporan-keuangan-btn');
     const loadingSpinner = document.getElementById('laporan-loading-spinner');
     const monthlyCtx = document.getElementById('monthly-summary-chart');
@@ -4843,7 +5395,7 @@ function initLaporanKeuanganPage() {
         minimumFractionDigits: 0
     });
 
-    async function loadMonthlySummaryDetails() {
+    async function loadMonthlySummaryDetails(selectedCategory = '') {
         const summaryContainer = document.getElementById('monthly-summary-details-container');
         if (!summaryContainer) return;
 
@@ -4862,7 +5414,7 @@ function initLaporanKeuanganPage() {
         const selectedMonth = monthFilter.value;
 
         try {
-            const response = await fetch(`${basePath}/api/laporan-keuangan?action=get_monthly_summary_details&tahun=${selectedYear}&bulan=${selectedMonth}`);
+            const response = await fetch(`${basePath}/api/laporan-keuangan?action=get_monthly_summary_details&tahun=${selectedYear}&bulan=${selectedMonth}&kategori=${selectedCategory}`);
             const result = await response.json();
 
             if (result.status === 'success') {
@@ -4877,7 +5429,7 @@ function initLaporanKeuanganPage() {
         }
     }
 
-    if (!yearFilter || !monthFilter || !monthlyCtx || !expenseCtx) return;
+    if (!yearFilter || !monthFilter || !categoryFilter || !monthlyCtx || !expenseCtx) return;
 
     // Populate year filter
     const currentYear = new Date().getFullYear();
@@ -4897,14 +5449,33 @@ function initLaporanKeuanganPage() {
     // Note: The charts on this page show an annual summary.
     // The print button will generate a monthly report based on the filter.
 
-    async function loadChartData() {
+    async function loadKategoriFilter() {
+        try {
+            const response = await fetch(`${basePath}/api/kategori-kas`);
+            const result = await response.json();
+            if (result.status === 'success') {
+                categoryFilter.innerHTML = '<option value="">Semua Kategori</option>'; // Reset
+                const allCategories = [...result.data.masuk, ...result.data.keluar];
+                // Sort and remove duplicates
+                const uniqueCategories = [...new Map(allCategories.map(item => [item.nama_kategori, item])).values()]
+                                         .sort((a, b) => a.nama_kategori.localeCompare(b.nama_kategori));
+
+                uniqueCategories.forEach(cat => {
+                    categoryFilter.add(new Option(cat.nama_kategori, cat.nama_kategori));
+                });
+            }
+        } catch (error) {
+            console.error("Gagal memuat filter kategori:", error);
+        }
+    }
+
+    async function loadChartData(selectedCategory = '') {
         loadingSpinner.style.display = 'block';
         const selectedYear = yearFilter.value;
 
         try {
-            // Fetch data for both charts
-            const [monthlyRes, expenseRes] = await Promise.all([
-                fetch(`${basePath}/api/laporan-keuangan?action=monthly_summary&tahun=${selectedYear}`),
+            const [monthlyRes, expenseRes] = await Promise.all([ // Fetch data for both charts
+                fetch(`${basePath}/api/laporan-keuangan?action=monthly_summary&tahun=${selectedYear}&kategori=${selectedCategory}`),
                 fetch(`${basePath}/api/laporan-keuangan?action=expense_categories&tahun=${selectedYear}`)
             ]);
             const monthlyData = await monthlyRes.json();
@@ -4944,25 +5515,34 @@ function initLaporanKeuanganPage() {
         }
     }
 
+    function handleFilterChange() {
+        const selectedCategory = categoryFilter.value;
+        loadChartData(selectedCategory);
+        loadMonthlySummaryDetails(selectedCategory);
+    }
+
     yearFilter.addEventListener('change', () => {
-        loadChartData();
-        loadMonthlySummaryDetails();
+        handleFilterChange();
     });
     yearFilter.dataset.listenerAdded = 'true'; // Mark as added
 
-    monthFilter.addEventListener('change', loadMonthlySummaryDetails);
+    monthFilter.addEventListener('change', () => loadMonthlySummaryDetails(categoryFilter.value));
+
+    categoryFilter.addEventListener('change', handleFilterChange);
 
     if (printBtn) {
         printBtn.addEventListener('click', () => {
             const tahun = yearFilter.value;
             const bulan = monthFilter.value;
-            const url = `${basePath}/laporan-keuangan/cetak?tahun=${tahun}&bulan=${bulan}`;
+            const kategori = categoryFilter.value;
+            const url = `${basePath}/laporan-keuangan/cetak?tahun=${tahun}&bulan=${bulan}&kategori=${encodeURIComponent(kategori)}`;
             window.open(url, '_blank');
         });
     }
-
-    loadChartData(); // Initial load for charts
-    loadMonthlySummaryDetails(); // Initial load for summary cards
+    
+    loadKategoriFilter().then(() => {
+        handleFilterChange(); // Initial load for all data
+    });
 }
 
 function initDokumenPage() {

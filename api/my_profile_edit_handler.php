@@ -12,7 +12,7 @@ $conn = Database::getInstance()->getConnection();
 $username = $_SESSION['username']; // This is the nama_panggilan
 
 try {
-    // Find warga_id from user's nama_panggilan (username)
+    // Find warga data from user's nama_panggilan (username)
     $stmt_warga = $conn->prepare("SELECT id FROM warga WHERE nama_panggilan = ?");
     $stmt_warga->bind_param("s", $username);
     $stmt_warga->execute();
@@ -23,9 +23,12 @@ try {
         throw new Exception("Profil warga Anda tidak ditemukan. Pastikan Anda memiliki Nama Panggilan yang valid.");
     }
     $warga_id = $warga['id'];
+    
+    // Simpan warga_id ke session untuk akses mudah di tempat lain
+    $_SESSION['warga_id'] = $warga_id;
 
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-        $stmt = $conn->prepare("SELECT no_kk, nik, nama_lengkap, alamat, no_telepon, pekerjaan FROM warga WHERE id = ?");
+        $stmt = $conn->prepare("SELECT id as warga_id, no_kk, nik, nama_lengkap, alamat, no_telepon, pekerjaan FROM warga WHERE id = ?");
         $stmt->bind_param("i", $warga_id);
         $stmt->execute();
         $profile_data = $stmt->get_result()->fetch_assoc();

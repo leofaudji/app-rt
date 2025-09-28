@@ -12,6 +12,7 @@ $conn = Database::getInstance()->getConnection();
 // Get filters from URL
 $tahun = $_GET['tahun'] ?? date('Y');
 $bulan = $_GET['bulan'] ?? date('m');
+$kategori = $_GET['kategori'] ?? '';
 
 // --- Fetch Data ---
 $bulan_map = [
@@ -26,16 +27,34 @@ $first_day_of_month = "$tahun-$bulan-01";
 $settings_result = $conn->query("SELECT setting_value FROM settings WHERE setting_key = 'housing_name'");
 $housing_name = $settings_result->fetch_assoc()['setting_value'] ?? 'Perumahan Anda';
 
+$kategori_filter_saldo = '';
+$params_saldo = [$first_day_of_month];
+$types_saldo = 's';
+if (!empty($kategori)) {
+    $kategori_filter_saldo = " AND kategori = ?";
+    $params_saldo[] = $kategori;
+    $types_saldo .= 's';
+}
+
 // Calculate Saldo Awal (balance before the selected month)
-$stmt_saldo_awal = $conn->prepare("SELECT SUM(CASE WHEN jenis = 'masuk' THEN jumlah ELSE -jumlah END) as saldo_awal FROM kas WHERE tanggal < ?");
-$stmt_saldo_awal->bind_param("s", $first_day_of_month);
+$stmt_saldo_awal = $conn->prepare("SELECT SUM(CASE WHEN jenis = 'masuk' THEN jumlah ELSE -jumlah END) as saldo_awal FROM kas WHERE tanggal < ? $kategori_filter_saldo");
+$stmt_saldo_awal->bind_param($types_saldo, ...$params_saldo);
 $stmt_saldo_awal->execute();
 $saldo_awal = $stmt_saldo_awal->get_result()->fetch_assoc()['saldo_awal'] ?? 0;
 $stmt_saldo_awal->close();
 
+$kategori_filter_transaksi = '';
+$params_transaksi = [$tahun, $bulan];
+$types_transaksi = 'ii';
+if (!empty($kategori)) {
+    $kategori_filter_transaksi = " AND kategori = ?";
+    $params_transaksi[] = $kategori;
+    $types_transaksi .= 's';
+}
+
 // Fetch transactions for the selected month
-$stmt_transaksi = $conn->prepare("SELECT * FROM kas WHERE YEAR(tanggal) = ? AND MONTH(tanggal) = ? ORDER BY tanggal ASC, created_at ASC");
-$stmt_transaksi->bind_param("ii", $tahun, $bulan);
+$stmt_transaksi = $conn->prepare("SELECT * FROM kas WHERE YEAR(tanggal) = ? AND MONTH(tanggal) = ? $kategori_filter_transaksi ORDER BY tanggal ASC, created_at ASC");
+$stmt_transaksi->bind_param($types_transaksi, ...$params_transaksi);
 $stmt_transaksi->execute();
 $transactions = $stmt_transaksi->get_result()->fetch_all(MYSQLI_ASSOC);
 $stmt_transaksi->close();
@@ -94,6 +113,9 @@ function format_rupiah($number) {
         <p class="fw-bold">PERIODE: <?= htmlspecialchars(strtoupper($periode_text)) ?></p>
     </div>
     <div class="report-body">
+        <?php if (!empty($kategori)): ?>
+            <p><strong>Filter Kategori Aktif:</strong> <?= htmlspecialchars($kategori) ?></p>
+        <?php endif; ?>
         <h4 class="mb-3">Ringkasan Keuangan</h4>
         <table class="table table-bordered summary-table mb-4">
             <tbody>

@@ -91,6 +91,9 @@ $log_cleanup_days = (int)($app_settings['log_cleanup_interval_days'] ?? 180);
         <li class="nav-item">
             <a class="nav-link" href="<?= base_url('/iuran-saya') ?>"><i class="bi bi-receipt"></i> Riwayat Iuran</a>
         </li>
+        <li class="nav-item">
+            <a class="nav-link" href="<?= base_url('/tabungan-saya') ?>"><i class="bi bi-piggy-bank"></i> Tabungan Saya</a>
+        </li>
 
         <!-- Manajemen Keuangan (Bendahara & Admin) -->
         <?php if (isset($_SESSION['role']) && in_array($_SESSION['role'], ['admin', 'bendahara'])): ?>

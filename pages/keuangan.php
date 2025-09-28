@@ -106,7 +106,7 @@ if (!$is_spa_request) {
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
-        <button type="button" class="btn btn-primary" id="save-kas-btn">Simpan</button>
+        <button type="button" class="btn btn-primary" id="save-transaksi-kas-btn">Simpan</button>
       </div>
     </div>
   </div>

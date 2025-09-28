@@ -2,6 +2,7 @@ SET FOREIGN_KEY_CHECKS = 0;
 
 DROP TABLE IF EXISTS `iuran`, `laporan_warga`, `kegiatan`, `kas`, `warga`, `rumah`, `rumah_penghuni_history`, `users`, `notifications`, `pengumuman`, `activity_log`, `settings`, `dokumen`, `fasilitas`, `booking_fasilitas`, `polling`, `polling_votes`, `anggaran`, `surat_pengantar`, `surat_templates`, `aset_rt`, `panic_log`, `peminjaman_aset`, `surat_keluar`, `struktur_organisasi`, `tamu`, `usaha_warga`, `galeri_album`, `galeri_foto`, `galeri_komentar`, `kas_kategori`,`iuran_settings_history`;
 
+DROP TABLE IF EXISTS `tabungan_warga`, `tabungan_kategori`, `tabungan_goals`;
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- Tabel untuk pengguna aplikasi (Admin RT, Bendahara, dll)
@@ -424,6 +425,49 @@ CREATE TABLE `kas_kategori` (
   UNIQUE KEY `nama_kategori_jenis` (`nama_kategori`,`jenis`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Tabel untuk target tabungan warga
+CREATE TABLE `tabungan_goals` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `warga_id` int(11) NOT NULL,
+  `nama_goal` varchar(255) NOT NULL,
+  `target_jumlah` decimal(12,2) NOT NULL,
+  `tanggal_target` date DEFAULT NULL,
+  `status` enum('aktif','tercapai') NOT NULL DEFAULT 'aktif',
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `warga_id` (`warga_id`),
+  FOREIGN KEY (`warga_id`) REFERENCES `warga` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Tabel untuk kategori tabungan warga
+CREATE TABLE `tabungan_kategori` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `nama_kategori` varchar(100) NOT NULL,
+  `jenis` enum('setor','tarik') NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `nama_kategori_jenis` (`nama_kategori`,`jenis`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Tabel untuk transaksi tabungan warga
+CREATE TABLE `tabungan_warga` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `warga_id` int(11) NOT NULL,
+  `tanggal` date NOT NULL,
+  `jenis` enum('setor','tarik') NOT NULL,
+  `kategori_id` int(11) NOT NULL,
+  `jumlah` decimal(12,2) NOT NULL,
+  `keterangan` varchar(255) DEFAULT NULL,
+  `dicatat_oleh` int(11) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `warga_id` (`warga_id`),
+  KEY `kategori_id` (`kategori_id`),
+  KEY `dicatat_oleh` (`dicatat_oleh`),
+  FOREIGN KEY (`warga_id`) REFERENCES `warga` (`id`) ON DELETE CASCADE,
+  FOREIGN KEY (`kategori_id`) REFERENCES `tabungan_kategori` (`id`),
+  FOREIGN KEY (`dicatat_oleh`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Data awal untuk kategori kas
 INSERT INTO `kas_kategori` (`nama_kategori`, `jenis`) VALUES
 ('Iuran Warga', 'masuk'),
@@ -438,6 +482,13 @@ INSERT INTO `kas_kategori` (`nama_kategori`, `jenis`) VALUES
 ('Acara RT', 'keluar'),
 ('Administrasi', 'keluar'),
 ('Lain-lain', 'keluar');
+
+-- Data awal untuk kategori tabungan
+INSERT INTO `tabungan_kategori` (`nama_kategori`, `jenis`) VALUES
+('Setoran Tunai', 'setor'),
+('Bagi Hasil / Bunga', 'setor'),
+('Penarikan Tunai', 'tarik'),
+('Biaya Administrasi', 'tarik');
 
 -- Tabel untuk pengaturan umum
 CREATE TABLE `settings` (

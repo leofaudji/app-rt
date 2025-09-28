@@ -19,7 +19,7 @@ $router->post('/login', 'actions/auth.php'); // Handler untuk proses login
 
 // Rute yang memerlukan otentikasi
 $router->get('/', 'logout.php'); // Selalu paksa logout/login saat membuka root
-$router->get('/dashboard', 'pages/dashboard_rt.php', ['auth', 'log_access']);
+$router->get('/dashboard', 'pages/dashboard.php', ['auth', 'log_access']);
 $router->get('/logout', 'logout.php');
 
 // --- Rute Manajemen Warga (Memerlukan login sebagai admin) ---
@@ -56,9 +56,14 @@ $router->get('/laporan', 'pages/laporan.php', ['auth']);
 $router->get('/my-profile/edit', 'pages/my_profile_edit.php', ['auth']);
 $router->get('/iuran-saya', 'pages/iuran_saya.php', ['auth']);
 $router->get('/keluarga-saya', 'pages/keluarga_saya.php', ['auth']);
+$router->get('/tabungan-saya', 'pages/tabungan_saya.php', ['auth']);
 $router->get('/my-profile/change-password', 'pages/my_profile.php', ['auth']);
 $router->get('/manajemen', 'pages/manajemen.php', ['auth', 'admin', 'bendahara']);
 $router->get('/manajemen/kategori-kas', 'pages/manajemen_kategori.php', ['auth', 'admin', 'bendahara']);
+$router->get('/manajemen/kategori-tabungan', 'pages/manajemen_kategori_tabungan.php', ['auth', 'admin', 'bendahara']);
+$router->get('/tabungan', 'pages/tabungan.php', ['auth', 'admin', 'bendahara']);
+$router->get('/tabungan/detail/(\d+)', 'pages/tabungan_detail.php', ['auth', 'admin', 'bendahara']);
+$router->get('/tabungan/cetak/(\d+)', 'pages/tabungan_cetak.php', ['auth']);
 
 // --- Rute API (Untuk proses data via AJAX) ---
 // Rute ini akan dipanggil oleh JavaScript untuk mendapatkan, menambah, mengubah, dan menghapus data tanpa reload halaman.
@@ -93,6 +98,8 @@ $router->get('/iuran/histori/([a-zA-Z0-9_-]+)/kk', 'pages/iuran_histori.php', ['
 $router->get('/api/iuran', 'api/iuran_handler.php', ['auth', 'bendahara']);
 $router->post('/api/iuran', 'api/iuran_handler.php', ['auth', 'bendahara']);
 
+$router->get('/api/tabungan', 'api/tabungan_handler.php', ['auth']);
+$router->post('/api/tabungan', 'api/tabungan_handler.php', ['auth', 'bendahara']);
 $router->get('/api/kegiatan', 'api/kegiatan_handler.php', ['auth']);
 $router->post('/api/kegiatan', 'api/kegiatan_handler.php', ['auth', 'admin']);
 $router->get('/kegiatan/undangan', 'pages/kegiatan_undangan.php', ['auth', 'admin']);
@@ -107,6 +114,7 @@ $router->post('/api/pengumuman', 'api/pengumuman_handler.php', ['auth', 'admin']
 $router->get('/api/dokumen', 'api/dokumen_handler.php', ['auth']);
 $router->post('/api/dokumen', 'api/dokumen_handler.php', ['auth', 'admin']);
 $router->get('/api/galeri', 'api/galeri_handler.php', ['auth']);
+$router->get('/api/tabungan-kategori', 'api/tabungan_kategori_handler.php', ['auth', 'bendahara']);
 $router->get('/api/laporan/iuran', 'api/laporan_iuran_handler.php', ['auth', 'admin', 'bendahara']);
 $router->get('/api/laporan/iuran/statistik', 'api/laporan_iuran_statistik_handler.php', ['auth', 'admin', 'bendahara']);
 $router->get('/api/laporan/iuran/export', 'api/laporan_iuran_export.php', ['auth', 'admin', 'bendahara']);
@@ -124,6 +132,7 @@ $router->get('/api/anggaran', 'api/anggaran_handler.php', ['auth', 'bendahara'])
 $router->get('/api/log', 'api/log_handler.php', ['auth', 'admin']);
 $router->post('/api/anggaran', 'api/anggaran_handler.php', ['auth', 'bendahara']);
 $router->get('/api/polling', 'api/polling_handler.php', ['auth']);
+$router->post('/api/tabungan-kategori', 'api/tabungan_kategori_handler.php', ['auth', 'bendahara']);
 $router->post('/api/galeri', 'api/galeri_handler.php', ['auth', 'admin']);
 $router->post('/api/polling', 'api/polling_handler.php', ['auth']);
 $router->post('/api/panic', 'api/panic_handler.php', ['auth']);

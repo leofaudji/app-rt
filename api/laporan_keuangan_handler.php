@@ -13,7 +13,7 @@ $conn = Database::getInstance()->getConnection();
 $action = $_GET['action'] ?? '';
 $tahun = $_GET['tahun'] ?? date('Y');
 $bulan = $_GET['bulan'] ?? date('m');
-$kategori = $_GET['kategori'] ?? '';
+$kategori = $_GET['kategori'] ?? ''; // Tambahkan ini
 
 try {
     if ($action === 'monthly_summary') {
@@ -23,14 +23,13 @@ try {
         
         $query = "SELECT MONTH(tanggal) as bulan, jenis, SUM(jumlah) as total FROM kas WHERE YEAR(tanggal) = ?";
         $params = [$tahun];
-        $types = 'i';
+        $types = 'i'; // Ubah dari 's' ke 'i'
 
         if (!empty($kategori)) {
             $query .= " AND kategori = ?";
             $params[] = $kategori;
             $types .= 's';
         }
-
         $query .= " GROUP BY MONTH(tanggal), jenis";
         $stmt = $conn->prepare($query);
         $stmt->bind_param($types, ...$params);
@@ -65,14 +64,14 @@ try {
     } elseif ($action === 'get_monthly_summary_details') {
         // Data for the new summary cards
         $first_day_of_month = "$tahun-$bulan-01";
-        $kategori_filter_saldo = '';
-        $kategori_filter_bulanan = '';
+        $kategori_filter_saldo = ''; // Tambahkan ini
+        $kategori_filter_bulanan = ''; // Tambahkan ini
         $params_saldo = [$first_day_of_month];
         $types_saldo = 's';
         $params_bulanan = [$tahun, $bulan];
         $types_bulanan = 'ii';
 
-        if (!empty($kategori)) {
+        if (!empty($kategori)) { // Tambahkan blok if ini
             $kategori_filter_saldo = " AND kategori = ?";
             $params_saldo[] = $kategori;
             $types_saldo .= 's';
