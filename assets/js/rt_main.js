@@ -279,6 +279,9 @@ function runPageScripts(path) {
     else if (cleanPath === '/manajemen/kategori-kas') {
         initManajemenKategoriPage();
     }
+    else if (cleanPath === '/neraca') {
+        initNeracaPage();
+    }
     else if (cleanPath === '/manajemen/kategori-tabungan') {
         initManajemenKategoriTabunganPage();
     }
@@ -287,6 +290,26 @@ function runPageScripts(path) {
 // =================================================================================
 // PAGE-SPECIFIC INITIALIZATION FUNCTIONS
 // =================================================================================
+
+function initNeracaPage() {
+    const kasEl = document.getElementById('neraca-kas');
+    const tabunganEl = document.getElementById('neraca-tabungan');
+    const bersihEl = document.getElementById('neraca-bersih');
+    const currencyFormatter = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 });
+
+    fetch(`${basePath}/api/neraca`)
+        .then(res => res.json())
+        .then(result => {
+            if (result.status === 'success') {
+                kasEl.textContent = currencyFormatter.format(result.data.total_kas);
+                tabunganEl.textContent = `(${currencyFormatter.format(result.data.total_tabungan)})`;
+                bersihEl.textContent = currencyFormatter.format(result.data.posisi_bersih);
+            } else { throw new Error(result.message); }
+        }).catch(err => {
+            [kasEl, tabunganEl, bersihEl].forEach(el => el.textContent = 'Error');
+            showToast(`Gagal memuat data neraca: ${err.message}`, 'error');
+        });
+}
 
 function initManajemenPage() {
     const triggerTabList = document.querySelectorAll('#manajemenTab button[data-bs-toggle="tab"]');
@@ -308,6 +331,7 @@ function initManajemenPage() {
 function initDashboardPage() {
     const totalWargaWidget = document.getElementById('total-warga-widget');
     const saldoKasWidget = document.getElementById('saldo-kas-widget');
+    const posisiKasBersihWidget = document.getElementById('posisi-kas-bersih-widget');
     const saldoTabunganWidget = document.getElementById('saldo-tabungan-widget');
     const rumahStatusChartCanvas = document.getElementById('rumah-status-chart');
     const birthdayWidgetList = document.getElementById('birthday-widget-list');
@@ -322,12 +346,13 @@ function initDashboardPage() {
     const saldoTrendMiniChartCanvas = document.getElementById('saldo-trend-mini-chart');
     const tabunganTrendMiniChartCanvas = document.getElementById('tabungan-trend-mini-chart');
     const iuranMenunggakWidget = document.getElementById('iuran-menunggak-widget');
+    const savingsGoalsWidget = document.getElementById('savings-goals-widget');
     let rumahStatusChart, demographicsChart, kasMonthlyChart, saldoTrendMiniChart, tabunganTrendMiniChart;
 
     const bulanFilter = document.getElementById('dashboard-bulan-filter');
     const tahunFilter = document.getElementById('dashboard-tahun-filter');
 
-    if (!totalWargaWidget || !bulanFilter || !tahunFilter) return;
+    if (!bulanFilter || !tahunFilter) return;
 
     function setupFilters() {
         const now = new Date();
@@ -353,7 +378,7 @@ function initDashboardPage() {
 
     async function fetchDashboardData(bulan, tahun) {
         // Show spinners
-        const spinners = [totalWargaWidget, saldoKasWidget, saldoTabunganWidget, iuranSummaryWidget, birthdayWidgetList, latestAnnouncementsWidget, upcomingActivitiesWidget, adminTasksWidget, newResidentsWidget, iuranMenunggakWidget];
+        const spinners = [totalWargaWidget, saldoKasWidget, posisiKasBersihWidget, saldoTabunganWidget, iuranSummaryWidget, birthdayWidgetList, latestAnnouncementsWidget, upcomingActivitiesWidget, adminTasksWidget, newResidentsWidget, iuranMenunggakWidget, savingsGoalsWidget];
         spinners.forEach(el => {
             if (el) {
                 const spinnerHtml = el.tagName === 'UL' || el.tagName === 'DIV' ? '<div class="text-center"><div class="spinner-border spinner-border-sm"></div></div>' : '<div class="spinner-border spinner-border-sm"></div>';
@@ -369,6 +394,7 @@ function initDashboardPage() {
                 const data = result.data;
                 if (totalWargaWidget) totalWargaWidget.textContent = data.total_warga;
                 if (saldoKasWidget) saldoKasWidget.textContent = data.saldo_kas;
+                if (posisiKasBersihWidget) posisiKasBersihWidget.textContent = data.posisi_kas_bersih;
                 if (saldoTabunganWidget) saldoTabunganWidget.textContent = data.saldo_tabungan;
 
                 if (rumahStatusChartCanvas && data.status_rumah) {
@@ -587,6 +613,42 @@ function initDashboardPage() {
                         `;
                     }
                 }
+                if (newResidentsWidget && data.warga_baru) {
+                    newResidentsWidget.innerHTML = ''; // Clear spinner
+                    if (data.warga_baru.length > 0) {
+                        data.warga_baru.forEach(warga => {
+                            const fotoProfil = warga.foto_profil 
+                                ? `<img src="${basePath}/${warga.foto_profil}" alt="Foto ${warga.nama_lengkap}" class="rounded-circle me-3" width="40" height="40" style="object-fit: cover;">`
+                                : `<i class="bi bi-person-circle fs-2 text-secondary me-3"></i>`;
+                            const item = `
+                                <a href="${basePath}/warga/profil/${warga.id}" class="list-group-item list-group-item-action d-flex align-items-center">
+                                    ${fotoProfil}
+                                    <div><strong>${warga.nama_lengkap}</strong><br><small class="text-muted">Blok ${warga.blok} No. ${warga.nomor}</small></div>
+                                </a>`;
+                            newResidentsWidget.insertAdjacentHTML('beforeend', item);
+                        });
+                    } else {
+                        newResidentsWidget.innerHTML = '<div class="list-group-item text-muted text-center">Tidak ada warga baru dalam 3 bulan terakhir.</div>';
+                    }
+                }
+                if (birthdayWidgetList && data.ulang_tahun_bulan_ini) {
+                    adminTasksWidget.innerHTML = ''; // Clear spinner
+                    if (data.admin_tasks.length > 0) {
+                        data.admin_tasks.forEach(task => {
+                            const item = `
+                                <a href="${basePath}${task.link}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                                    ${task.label}
+                                    <span class="badge bg-danger rounded-pill">${task.count}</span>
+                                </a>
+                            `;
+                            adminTasksWidget.insertAdjacentHTML('beforeend', item);
+                        });
+                    } else {
+                        adminTasksWidget.innerHTML = `
+                            <div class="list-group-item text-muted text-center">Tidak ada tugas yang menunggu.</div>
+                        `;
+                    }
+                }
                 if (birthdayWidgetList && data.ulang_tahun_bulan_ini) {
                     birthdayWidgetList.innerHTML = ''; // Clear spinner
                     if (data.ulang_tahun_bulan_ini.length > 0) {
@@ -663,22 +725,103 @@ function initDashboardPage() {
                             </li>`;
                     }
                 }
+                if (savingsGoalsWidget && data.savings_goals) {
+                    savingsGoalsWidget.innerHTML = ''; // Clear spinner
+                    if (data.savings_goals.length > 0) {
+                        const currentBalance = data.saldo_tabungan_raw || 0;
+                        data.savings_goals.forEach(goal => {
+                            const progress = Math.min((currentBalance / goal.target_jumlah) * 100, 100);
+                            const isAchieved = progress >= 100;
+                            const targetDate = goal.tanggal_target ? `Target: ${new Date(goal.tanggal_target).toLocaleDateString('id-ID', {day:'numeric', month:'long'})}` : 'Tanpa batas waktu';
+                            const currencyFormatter = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 });
+
+                            const goalHtml = `
+                                <div class="col-md-6 mb-3 mb-md-0" id="dashboard-goal-${goal.id}">
+                                    <div class="d-flex justify-content-between">
+                                        <span class="fw-bold">${goal.nama_goal}</span>
+                                        <div class="dropdown">
+                                            <button class="btn btn-sm btn-light py-0 px-1" type="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi bi-three-dots-vertical"></i></button>
+                                            <ul class="dropdown-menu dropdown-menu-end">
+                                                <li><a class="dropdown-item edit-goal-btn" href="#" data-goal='${JSON.stringify(goal)}'><i class="bi bi-pencil-fill me-2"></i>Edit</a></li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                    <p class="mb-1 small text-muted">${targetDate}</p>
+                                    <p class="mb-1 small">Target: <strong>${currencyFormatter.format(goal.target_jumlah)}</strong></p>
+                                    <div class="progress" role="progressbar" style="height: 20px;">
+                                        <div class="progress-bar ${isAchieved ? 'bg-success' : 'bg-primary'}" style="width: ${progress}%">${progress.toFixed(0)}%</div>
+                                    </div>
+                                </div>
+                            `;
+                            savingsGoalsWidget.insertAdjacentHTML('beforeend', goalHtml);
+                        });
+                    } else {
+                        savingsGoalsWidget.innerHTML = '<div class="col-12 text-center text-muted">Anda belum memiliki target tabungan. <a href="' + basePath + '/tabungan-saya">Buat sekarang!</a></div>';
+                    }
+                }
             } else {
                 throw new Error(result.message || 'Gagal memuat data.');
             }
         } catch (error) {
             console.error('Error loading dashboard data:', error);
-            [totalWargaWidget, saldoKasWidget, saldoTabunganWidget].forEach(el => { if (el) el.textContent = 'Error' });
+            [totalWargaWidget, saldoKasWidget, posisiKasBersihWidget, saldoTabunganWidget].forEach(el => { if (el) el.textContent = 'Error' });
             if (birthdayWidgetList) birthdayWidgetList.innerHTML = '<li class="list-group-item text-danger">Gagal memuat.</li>';
             if (latestAnnouncementsWidget) latestAnnouncementsWidget.innerHTML = '<p class="text-danger mb-0">Gagal memuat.</p>';
             if (upcomingActivitiesWidget) upcomingActivitiesWidget.innerHTML = '<p class="text-danger mb-0">Gagal memuat.</p>';
             if (adminTasksWidget) adminTasksWidget.innerHTML = '<div class="list-group-item text-danger">Gagal memuat.</div>';
             if (newResidentsWidget) newResidentsWidget.innerHTML = '<div class="list-group-item text-danger">Gagal memuat.</div>';
             if (iuranSummaryWidget) iuranSummaryWidget.innerHTML = '<h2 class="fw-bold">Error</h2>';
+            if (savingsGoalsWidget) savingsGoalsWidget.innerHTML = '<div class="col-12 text-center text-danger">Gagal memuat target.</div>';
             if (iuranMenunggakWidget) iuranMenunggakWidget.innerHTML = '<li class="list-group-item text-danger">Gagal memuat.</li>';
         }
     }
 
+    // --- Modal Handling for Savings Goals (from Dashboard) ---
+    if (savingsGoalsWidget) {
+        const goalModalEl = document.getElementById('goalModal');
+        const goalModal = goalModalEl ? new bootstrap.Modal(goalModalEl) : null;
+        const goalForm = document.getElementById('goal-form');
+        const saveGoalBtn = document.getElementById('save-goal-btn');
+
+        if (goalModal && goalForm && saveGoalBtn) {
+            savingsGoalsWidget.addEventListener('click', (e) => {
+                const editBtn = e.target.closest('.edit-goal-btn');
+                if (editBtn) {
+                    e.preventDefault();
+                    const goal = JSON.parse(editBtn.dataset.goal);
+                    document.getElementById('goalModalLabel').textContent = 'Edit Target Tabungan';
+                    document.getElementById('goal-action').value = 'update_goal';
+                    document.getElementById('goal-id').value = goal.id;
+                    document.getElementById('nama_goal').value = goal.nama_goal;
+                    document.getElementById('target_jumlah').value = goal.target_jumlah;
+                    document.getElementById('tanggal_target').value = goal.tanggal_target;
+                    goalModal.show();
+                }
+            });
+
+            saveGoalBtn.addEventListener('click', async () => {
+                const formData = new FormData(goalForm);
+                const originalBtnHtml = saveGoalBtn.innerHTML;
+                saveGoalBtn.disabled = true;
+                saveGoalBtn.innerHTML = `<span class="spinner-border spinner-border-sm"></span> Menyimpan...`;
+
+                try {
+                    const response = await fetch(`${basePath}/api/tabungan`, { method: 'POST', body: formData });
+                    const result = await response.json();
+                    showToast(result.message, result.status === 'success' ? 'success' : 'error');
+                    if (result.status === 'success') {
+                        goalModal.hide();
+                        fetchDashboardData(bulanFilter.value, tahunFilter.value); // Refresh dashboard data
+                    }
+                } catch (error) {
+                    showToast('Terjadi kesalahan jaringan.', 'error');
+                } finally {
+                    saveGoalBtn.disabled = false;
+                    saveGoalBtn.innerHTML = originalBtnHtml;
+                }
+            });
+        }
+    }
     // --- Event Listeners ---
     const handleFilterChange = () => {
         fetchDashboardData(bulanFilter.value, tahunFilter.value);
@@ -1187,6 +1330,8 @@ function initKeuanganPage() {
     const kasTableBody = document.getElementById('kas-table-body');
     const searchInput = document.getElementById('search-kas');
     const jenisFilter = document.getElementById('filter-jenis-kas');
+    const monthFilter = document.getElementById('filter-bulan-kas');
+    const yearFilter = document.getElementById('filter-tahun-kas');
     const kasModalEl = document.getElementById('kasModal');
     const kasModal = new bootstrap.Modal(kasModalEl);
     const kasForm = document.getElementById('kas-form');
@@ -1204,6 +1349,26 @@ function initKeuanganPage() {
         minimumFractionDigits: 0
     });
 
+    function setupFilters() {
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth() + 1;
+
+        // Populate years
+        for (let i = 0; i < 5; i++) {
+            const year = currentYear - i;
+            yearFilter.add(new Option(year, year));
+        }
+
+        // Populate months
+        const months = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+        months.forEach((month, index) => {
+            monthFilter.add(new Option(month, index + 1));
+        });
+
+        monthFilter.value = currentMonth;
+        yearFilter.value = currentYear;
+    }
     async function updateKategoriOptions(jenis, selectedKategori = null) {
         kategoriSelectModal.innerHTML = '<option>Memuat...</option>';
         try {
@@ -1223,10 +1388,10 @@ function initKeuanganPage() {
         }
     }
 
-    async function loadKas(searchTerm = '', jenis = '', page = 1, perPage = '10') {
+    async function loadKas(searchTerm = '', jenis = '', bulan = '', tahun = '', page = 1, perPage = '10') {
         kasTableBody.innerHTML = '<tr><td colspan="7" class="text-center">Memuat data...</td></tr>';
         try {
-            let apiUrl = `${basePath}/api/kas?search=${encodeURIComponent(searchTerm)}&jenis=${encodeURIComponent(jenis)}&page=${page}`;
+            let apiUrl = `${basePath}/api/kas?search=${encodeURIComponent(searchTerm)}&jenis=${encodeURIComponent(jenis)}&bulan=${bulan}&tahun=${tahun}&page=${page}`;
             if (perPage !== 'all') {
                 apiUrl += `&limit=${perPage}`;
             }
@@ -1255,7 +1420,7 @@ function initKeuanganPage() {
                 kasTableBody.innerHTML = '<tr><td colspan="7" class="text-center">Tidak ada data transaksi ditemukan.</td></tr>';
             }
             renderPagination(paginationContainer, result.pagination, (newPage) => {
-                loadKas(searchInput.value, jenisFilter.value, newPage, limitSelect.value);
+                loadKas(searchInput.value, jenisFilter.value, monthFilter.value, yearFilter.value, newPage, limitSelect.value);
             });
         } catch (error) {
             kasTableBody.innerHTML = `<tr><td colspan="7" class="text-center text-danger">Gagal memuat data.</td></tr>`;
@@ -1266,13 +1431,15 @@ function initKeuanganPage() {
     let debounceTimer;
     const combinedFilterHandler = () => {
         clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(() => loadKas(searchInput.value, jenisFilter.value, 1, limitSelect.value), 300);
+        debounceTimer = setTimeout(() => loadKas(searchInput.value, jenisFilter.value, monthFilter.value, yearFilter.value, 1, limitSelect.value), 300);
     };
 
     searchInput.addEventListener('input', combinedFilterHandler);
     jenisFilter.addEventListener('change', combinedFilterHandler);
+    monthFilter.addEventListener('change', combinedFilterHandler);
+    yearFilter.addEventListener('change', combinedFilterHandler);
     limitSelect.addEventListener('change', () => {
-        loadKas(searchInput.value, jenisFilter.value, 1, limitSelect.value);
+        loadKas(searchInput.value, jenisFilter.value, monthFilter.value, yearFilter.value, 1, limitSelect.value);
     });
 
     if (jenisSelectModal) {
@@ -1298,7 +1465,7 @@ function initKeuanganPage() {
             if (result.status === 'success') {
                 kasModal.hide();
                 showToast(result.message, 'success');
-                loadKas(searchInput.value, jenisFilter.value, 1, limitSelect.value);
+                loadKas(searchInput.value, jenisFilter.value, monthFilter.value, yearFilter.value, 1, limitSelect.value);
             } else {
                 showToast(result.message, 'error');
             }
@@ -1352,7 +1519,7 @@ function initKeuanganPage() {
                     const result = await response.json();
                     showToast(result.message, result.status === 'success' ? 'success' : 'error');
                     if (result.status === 'success') {
-                        loadKas(searchInput.value, jenisFilter.value, 1, limitSelect.value);
+                        loadKas(searchInput.value, jenisFilter.value, monthFilter.value, yearFilter.value, 1, limitSelect.value);
                     } else {
                         deleteBtn.disabled = false;
                         deleteBtn.innerHTML = originalIcon;
@@ -1379,7 +1546,8 @@ function initKeuanganPage() {
         }
     });
 
-    loadKas(searchInput.value, jenisFilter.value, 1, limitSelect.value);
+    setupFilters();
+    loadKas(searchInput.value, jenisFilter.value, monthFilter.value, yearFilter.value, 1, limitSelect.value);
 }
 
 function initUsersPage() {
@@ -3330,28 +3498,6 @@ function initTabunganSayaPage() {
         }
     }
 
-    document.getElementById('goalModal').addEventListener('show.bs.modal', (e) => {
-        const button = e.relatedTarget;
-        const form = document.getElementById('goal-form');
-        form.reset();
-        if (button && button.dataset.action === 'add') {
-            document.getElementById('goalModalLabel').textContent = 'Tambah Target Tabungan';
-            document.getElementById('goal-action').value = 'add_goal';
-        }
-    });
-
-    document.getElementById('save-goal-btn').addEventListener('click', async () => {
-        const form = document.getElementById('goal-form');
-        const formData = new FormData(form);
-        const response = await fetch(`${basePath}/api/tabungan`, { method: 'POST', body: formData });
-        const result = await response.json();
-        showToast(result.message, result.status === 'success' ? 'success' : 'error');
-        if (result.status === 'success') {
-            goalModal.hide();
-            loadMySavings();
-        }
-    });
-
     goalsContainer.addEventListener('click', async (e) => {
         const editBtn = e.target.closest('.edit-goal-btn');
         if (editBtn) {
@@ -3365,8 +3511,61 @@ function initTabunganSayaPage() {
             document.getElementById('tanggal_target').value = goal.tanggal_target;
             goalModal.show();
         }
+
+        const deleteBtn = e.target.closest('.delete-goal-btn');
+        if (deleteBtn) {
+            e.preventDefault();
+            const { id, nama } = deleteBtn.dataset;
+            if (confirm(`Apakah Anda yakin ingin menghapus target tabungan "${nama}"?`)) {
+                const formData = new FormData();
+                formData.append('action', 'delete_goal');
+                formData.append('id', id);
+
+                const response = await fetch(`${basePath}/api/tabungan`, { method: 'POST', body: formData });
+                const result = await response.json();
+                showToast(result.message, result.status === 'success' ? 'success' : 'error');
+                if (result.status === 'success') {
+                    loadMySavings();
+                }
+            }
+        }
     });
 
+    document.getElementById('goalModal').addEventListener('show.bs.modal', (e) => {
+        const button = e.relatedTarget;
+        const form = document.getElementById('goal-form');
+        form.reset();
+        if (button && button.dataset.action === 'add') {
+            document.getElementById('goalModalLabel').textContent = 'Tambah Target Tabungan';
+            document.getElementById('goal-action').value = 'add_goal';
+            document.getElementById('goal-id').value = '';
+        }
+    });
+
+    const saveGoalBtn = document.getElementById('save-goal-btn');
+    saveGoalBtn.addEventListener('click', async () => {
+        const form = document.getElementById('goal-form');
+        const formData = new FormData(form);
+
+        const originalBtnHtml = saveGoalBtn.innerHTML;
+        saveGoalBtn.disabled = true;
+        saveGoalBtn.innerHTML = `<span class="spinner-border spinner-border-sm"></span> Menyimpan...`;
+
+        try {
+            const response = await fetch(`${basePath}/api/tabungan`, { method: 'POST', body: formData });
+            const result = await response.json();
+            showToast(result.message, result.status === 'success' ? 'success' : 'error');
+            if (result.status === 'success') {
+                goalModal.hide();
+                loadMySavings();
+            }
+        } catch (error) {
+            showToast('Terjadi kesalahan jaringan.', 'error');
+        } finally {
+            saveGoalBtn.disabled = false;
+            saveGoalBtn.innerHTML = originalBtnHtml;
+        }
+    });
     loadMySavings();
 }
 
@@ -3426,6 +3625,98 @@ function initTabunganPage() {
         debounceTimer = setTimeout(() => loadSummary(searchInput.value), 300);
     });
 
+    // --- Global Transaction Modal Logic ---
+    const globalModalEl = document.getElementById('tabunganTxGlobalModal');
+    if (globalModalEl) {
+        const globalModal = new bootstrap.Modal(globalModalEl);
+        const globalForm = document.getElementById('tabungan-tx-global-form');
+        const wargaSelect = document.getElementById('tx-global-warga');
+        const jenisSelect = document.getElementById('tx-global-jenis');
+        const kategoriSelect = document.getElementById('tx-global-kategori');
+        const goalSelect = document.getElementById('tx-global-goal');
+        const saveBtn = document.getElementById('save-tabungan-tx-global-btn');
+
+        async function loadWargaForSelect() {
+            wargaSelect.innerHTML = '<option value="">Memuat daftar warga...</option>';
+            try {
+                const response = await fetch(`${basePath}/api/warga?action=list&limit=all`);
+                const result = await response.json();
+                wargaSelect.innerHTML = '<option value="">-- Pilih Warga --</option>';
+                if (result.status === 'success') {
+                    result.data.forEach(warga => {
+                        if (warga.status_dalam_keluarga === 'Kepala Keluarga') {
+                            wargaSelect.add(new Option(`${warga.nama_lengkap} (KK: ${warga.no_kk})`, warga.id));
+                        }
+                    });
+                }
+            } catch (error) {
+                wargaSelect.innerHTML = '<option value="">Gagal memuat warga</option>';
+            }
+        }
+
+        async function loadKategoriForSelect(jenis) {
+            kategoriSelect.innerHTML = '<option>Memuat...</option>';
+            const response = await fetch(`${basePath}/api/tabungan-kategori`);
+            const result = await response.json();
+            kategoriSelect.innerHTML = '';
+            if (result.status === 'success' && result.data[jenis]) {
+                result.data[jenis].forEach(cat => kategoriSelect.add(new Option(cat.nama_kategori, cat.id)));
+            }
+        }
+
+        async function loadGoalsForSelect(wargaId) {
+            goalSelect.innerHTML = '<option value="">Memuat target...</option>';
+            goalSelect.disabled = true;
+            try {
+                const response = await fetch(`${basePath}/api/tabungan?action=detail&warga_id=${wargaId}`);
+                const result = await response.json();
+                goalSelect.innerHTML = '<option value="">-- Tanpa Target --</option>';
+                if (result.status === 'success' && result.data.goals) {
+                    result.data.goals.forEach(goal => {
+                        if (goal.status === 'aktif') {
+                            goalSelect.add(new Option(goal.nama_goal, goal.id));
+                        }
+                    });
+                }
+            } catch (error) {
+                goalSelect.innerHTML = '<option value="">Gagal memuat target</option>';
+            } finally {
+                goalSelect.disabled = false;
+            }
+        }
+
+        globalModalEl.addEventListener('show.bs.modal', () => {
+            globalForm.reset();
+            document.getElementById('tx-global-tanggal').valueAsDate = new Date();
+            loadWargaForSelect();
+            loadKategoriForSelect(jenisSelect.value);
+            goalSelect.innerHTML = '<option value="">-- Pilih Warga Terlebih Dahulu --</option>';
+            goalSelect.disabled = true;
+        });
+
+        wargaSelect.addEventListener('change', () => {
+            if (wargaSelect.value) {
+                loadGoalsForSelect(wargaSelect.value);
+            } else {
+                goalSelect.innerHTML = '<option value="">-- Pilih Warga Terlebih Dahulu --</option>';
+                goalSelect.disabled = true;
+            }
+        });
+
+        jenisSelect.addEventListener('change', () => loadKategoriForSelect(jenisSelect.value));
+
+        saveBtn.addEventListener('click', async () => {
+            const formData = new FormData(globalForm);
+            const response = await fetch(`${basePath}/api/tabungan`, { method: 'POST', body: formData });
+            const result = await response.json();
+            showToast(result.message, result.status === 'success' ? 'success' : 'error');
+            if (result.status === 'success') {
+                globalModal.hide();
+                loadSummary(); // Refresh the main table
+            }
+        });
+    }
+
     loadSummary();
 }
 
@@ -3442,7 +3733,7 @@ function initTabunganDetailPage() {
     const form = document.getElementById('tabungan-tx-form');
     const saveBtn = document.getElementById('save-tabungan-tx-btn');
     const jenisSelect = document.getElementById('tx-jenis');
-    const kategoriSelect = document.getElementById('tx-kategori');
+    const kategoriSelect = document.getElementById('tx-kategori');    const goalSelect = document.getElementById('tx-goal');
 
     const currencyFormatter = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 });
 
@@ -3455,10 +3746,11 @@ function initTabunganDetailPage() {
             const response = await fetch(`${basePath}/api/tabungan?action=detail&warga_id=${wargaId}`);
             const result = await response.json();
             if (result.status === 'success') {
-                const { warga, transactions, saldo } = result.data;
+                const { warga, transactions, saldo, goals } = result.data;
                 namaEl.textContent = `${warga.nama_lengkap} (KK: ${warga.no_kk})`;
                 saldoEl.textContent = currencyFormatter.format(saldo);
                 tableBody.innerHTML = '';
+                populateGoalDropdown(goals);
                 if (transactions.length > 0) {
                     transactions.forEach(tx => {
                         const row = `
@@ -3487,6 +3779,17 @@ function initTabunganDetailPage() {
         }
     }
 
+    function populateGoalDropdown(goals) {
+        goalSelect.innerHTML = '<option value="">-- Tanpa Target --</option>';
+        if (goals && goals.length > 0) {
+            goals.forEach(goal => {
+                if (goal.status === 'aktif') {
+                    goalSelect.add(new Option(goal.nama_goal, goal.id));
+                }
+            });
+        }
+    }
+
     async function loadKategoriOptions(jenis) {
         kategoriSelect.innerHTML = '<option>Memuat...</option>';
         const response = await fetch(`${basePath}/api/tabungan-kategori`);
@@ -3500,6 +3803,7 @@ function initTabunganDetailPage() {
     modalEl.addEventListener('show.bs.modal', () => {
         form.reset();
         document.getElementById('tx-tanggal').valueAsDate = new Date();
+        // Goal dropdown is populated by loadDetail()
         loadKategoriOptions(jenisSelect.value);
     });
 

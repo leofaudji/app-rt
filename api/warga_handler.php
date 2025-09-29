@@ -55,7 +55,7 @@ try {
                 }
                 $stmtCount->execute();
                 $totalRecords = $stmtCount->get_result()->fetch_assoc()['total'];
-                $totalPages = ceil($totalRecords / $limit);
+                $totalPages = $use_limit && $limit > 0 ? ceil($totalRecords / $limit) : 1;
                 $stmtCount->close();
 
                 // Dapatkan data per halaman
@@ -73,8 +73,6 @@ try {
                 }
                 $stmt->execute();
                 $result = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-
-                $totalPages = $use_limit ? ceil($totalRecords / $limit) : 1;
 
                 echo json_encode([
                     'status' => 'success', 
@@ -145,6 +143,25 @@ try {
                 $stmt->bind_param("i", $warga_id);
                 $stmt->execute();
                 $profile_data = $stmt->get_result()->fetch_assoc();
+
+                // Mask sensitive data if a 'warga' is viewing another 'warga's profile
+                if ($profile_data && $_SESSION['role'] === 'warga') {
+                    // Get the logged-in user's warga_id to check if they are viewing their own profile
+                    $stmt_user = $conn->prepare("SELECT id FROM warga WHERE nama_panggilan = ?");
+                    $stmt_user->bind_param("s", $_SESSION['username']);
+                    $stmt_user->execute();
+                    $user_warga = $stmt_user->get_result()->fetch_assoc();
+                    $stmt_user->close();
+                    $current_user_warga_id = $user_warga['id'] ?? null;
+
+                    // Only mask if the viewer is not the owner of the profile
+                    if ($current_user_warga_id != $warga_id) {
+                        $profile_data['no_kk'] = '***';
+                        $profile_data['nik'] = '***';
+                        $profile_data['tgl_lahir'] = '***';
+                    }
+                }
+
                 $stmt->close();
                 echo json_encode(['status' => 'success', 'data' => $profile_data]);
                 break;

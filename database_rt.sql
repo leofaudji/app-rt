@@ -452,19 +452,22 @@ CREATE TABLE `tabungan_kategori` (
 CREATE TABLE `tabungan_warga` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `warga_id` int(11) NOT NULL,
+  `goal_id` int(11) DEFAULT NULL,
   `tanggal` date NOT NULL,
   `jenis` enum('setor','tarik') NOT NULL,
-  `kategori_id` int(11) NOT NULL,
+  `kategori_id` int(11) DEFAULT NULL,
   `jumlah` decimal(12,2) NOT NULL,
   `keterangan` varchar(255) DEFAULT NULL,
   `dicatat_oleh` int(11) DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`id`),
   KEY `warga_id` (`warga_id`),
+  KEY `goal_id` (`goal_id`),
   KEY `kategori_id` (`kategori_id`),
   KEY `dicatat_oleh` (`dicatat_oleh`),
   FOREIGN KEY (`warga_id`) REFERENCES `warga` (`id`) ON DELETE CASCADE,
-  FOREIGN KEY (`kategori_id`) REFERENCES `tabungan_kategori` (`id`),
+  FOREIGN KEY (`goal_id`) REFERENCES `tabungan_goals` (`id`) ON DELETE SET NULL,
+  FOREIGN KEY (`kategori_id`) REFERENCES `tabungan_kategori` (`id`) ON DELETE SET NULL,
   FOREIGN KEY (`dicatat_oleh`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -699,6 +702,22 @@ INSERT INTO `kas` (`tanggal`, `jenis`, `kategori`, `keterangan`, `jumlah`, `dica
 (DATE_FORMAT(NOW() - INTERVAL 3 MONTH ,'%Y-%m-05'), 'keluar', 'Kebersihan', 'Pembayaran gaji petugas kebersihan', 350000.00, 1),
 (DATE_FORMAT(NOW() - INTERVAL 3 MONTH ,'%Y-%m-05'), 'keluar', 'Keamanan', 'Pembayaran gaji satpam', 750000.00, 1);
 
+-- Data Demo: Transaksi Tabungan Warga (sekaligus dicatat di KAS)
+-- Setoran Budi Santoso
+INSERT INTO `kas` (`tanggal`, `jenis`, `kategori`, `keterangan`, `jumlah`, `dicatat_oleh`) VALUES (DATE_FORMAT(NOW() - INTERVAL 2 MONTH, '%Y-%m-15'), 'masuk', 'Tabungan Warga', 'Setoran Tabungan: Budi Santoso (Ref Tabungan ID: 1)', 200000.00, 1);
+-- Setoran Agus Setiawan
+INSERT INTO `kas` (`tanggal`, `jenis`, `kategori`, `keterangan`, `jumlah`, `dicatat_oleh`) VALUES (DATE_FORMAT(NOW() - INTERVAL 2 MONTH, '%Y-%m-16'), 'masuk', 'Tabungan Warga', 'Setoran Tabungan: Agus Setiawan (Ref Tabungan ID: 2)', 350000.00, 1);
+-- Penarikan Budi Santoso
+INSERT INTO `kas` (`tanggal`, `jenis`, `kategori`, `keterangan`, `jumlah`, `dicatat_oleh`) VALUES (DATE_FORMAT(NOW() - INTERVAL 1 MONTH, '%Y-%m-20'), 'keluar', 'Tabungan Warga', 'Penarikan Tabungan: Budi Santoso (Ref Tabungan ID: 3)', 50000.00, 1);
+-- Setoran Rahmat Hidayat
+INSERT INTO `kas` (`tanggal`, `jenis`, `kategori`, `keterangan`, `jumlah`, `dicatat_oleh`) VALUES (DATE_FORMAT(NOW() - INTERVAL 2 MONTH, '%Y-%m-18'), 'masuk', 'Tabungan Warga', 'Setoran Tabungan: Rahmat Hidayat (Ref Tabungan ID: 4)', 150000.00, 1);
+-- Setoran Iwan Setiawan
+INSERT INTO `kas` (`tanggal`, `jenis`, `kategori`, `keterangan`, `jumlah`, `dicatat_oleh`) VALUES (DATE_FORMAT(NOW() - INTERVAL 1 MONTH, '%Y-%m-10'), 'masuk', 'Tabungan Warga', 'Setoran Tabungan: Iwan Setiawan (Ref Tabungan ID: 5)', 500000.00, 1);
+-- Penarikan Iwan Setiawan
+INSERT INTO `kas` (`tanggal`, `jenis`, `kategori`, `keterangan`, `jumlah`, `dicatat_oleh`) VALUES (DATE_FORMAT(NOW(), '%Y-%m-01'), 'keluar', 'Tabungan Warga', 'Penarikan Tabungan: Iwan Setiawan (Ref Tabungan ID: 6)', 100000.00, 1);
+-- Setoran Susi Lestari
+INSERT INTO `kas` (`tanggal`, `jenis`, `kategori`, `keterangan`, `jumlah`, `dicatat_oleh`) VALUES (DATE_FORMAT(NOW() - INTERVAL 3 MONTH, '%Y-%m-25'), 'masuk', 'Tabungan Warga', 'Setoran Tabungan: Susi Lestari (Ref Tabungan ID: 7)', 1000000.00, 1);
+
 -- Data Iuran (sesuai dengan data kas)
 -- Bulan ini
 INSERT INTO `iuran` (`no_kk`, `periode_tahun`, `periode_bulan`, `jumlah`, `tanggal_bayar`, `dicatat_oleh`) VALUES 
@@ -724,6 +743,26 @@ INSERT INTO `iuran` (`no_kk`, `periode_tahun`, `periode_bulan`, `jumlah`, `tangg
 INSERT INTO `iuran` (`no_kk`, `periode_tahun`, `periode_bulan`, `jumlah`, `tanggal_bayar`, `dicatat_oleh`) VALUES 
 ('3201010101010001', YEAR(CURDATE() - INTERVAL 3 MONTH), MONTH(CURDATE() - INTERVAL 3 MONTH), 50000.00, DATE_FORMAT(NOW() - INTERVAL 3 MONTH ,'%Y-%m-02'), 1),
 ('3201010101010002', YEAR(CURDATE() - INTERVAL 3 MONTH), MONTH(CURDATE() - INTERVAL 3 MONTH), 50000.00, DATE_FORMAT(NOW() - INTERVAL 3 MONTH ,'%Y-%m-03'), 1);
+
+-- Data Demo: Target Tabungan (Dipindahkan ke sini setelah data warga dibuat)
+INSERT INTO `tabungan_goals` (`id`, `warga_id`, `nama_goal`, `target_jumlah`, `tanggal_target`, `status`) VALUES
+(1, 1, 'Dana Pendidikan Anak', 5000000.00, '2025-07-01', 'aktif'),
+(2, 1, 'Beli Motor Baru', 20000000.00, '2026-01-01', 'aktif'),
+(3, 4, 'Renovasi Rumah', 10000000.00, NULL, 'aktif'),
+(4, 10, 'Wisata Keluarga', 15000000.00, '2025-12-31', 'aktif'),
+(5, 10, 'Dana Haji', 100000000.00, '2028-01-01', 'aktif');
+
+-- Data Demo: Transaksi Tabungan Warga
+INSERT INTO `tabungan_warga` (`id`, `warga_id`, `goal_id`, `tanggal`, `jenis`, `kategori_id`, `jumlah`, `keterangan`, `dicatat_oleh`) VALUES
+(1, 1, 1, DATE_FORMAT(NOW() - INTERVAL 2 MONTH, '%Y-%m-15'), 'setor', 1, 200000.00, 'Setoran awal', 1),
+(2, 4, 3, DATE_FORMAT(NOW() - INTERVAL 2 MONTH, '%Y-%m-16'), 'setor', 1, 350000.00, 'Setoran rutin', 1),
+(3, 1, 1, DATE_FORMAT(NOW() - INTERVAL 1 MONTH, '%Y-%m-20'), 'tarik', 3, 50000.00, 'Keperluan mendadak', 1),
+(4, 6, NULL, DATE_FORMAT(NOW() - INTERVAL 2 MONTH, '%Y-%m-18'), 'setor', 1, 150000.00, 'Setoran bulanan', 1),
+(5, 11, NULL, DATE_FORMAT(NOW() - INTERVAL 1 MONTH, '%Y-%m-10'), 'setor', 1, 500000.00, 'Dana darurat', 1),
+(6, 11, NULL, DATE_FORMAT(NOW(), '%Y-%m-01'), 'tarik', 3, 100000.00, 'Biaya sekolah anak', 1),
+(7, 21, NULL, DATE_FORMAT(NOW() - INTERVAL 3 MONTH, '%Y-%m-25'), 'setor', 1, 1000000.00, 'Investasi', 1),
+(8, 10, 4, DATE_FORMAT(NOW() - INTERVAL 1 MONTH, '%Y-%m-10'), 'setor', 1, 1000000.00, 'Setoran untuk wisata', 1),
+(9, 10, 5, DATE_FORMAT(NOW() - INTERVAL 15 DAY, '%Y-%m-15'), 'setor', 1, 2500000.00, 'Setoran awal dana haji', 1);
 
 INSERT INTO `fasilitas` (`id`, `nama_fasilitas`, `deskripsi`, `warna_event`) VALUES
 (1, 'Balai Warga', 'Ruang serbaguna untuk rapat dan acara warga.', '#0d6efd'),
@@ -805,4 +844,7 @@ INSERT INTO `anggaran` (`tahun`, `kategori`, `jumlah_anggaran`) VALUES
 INSERT INTO `surat_templates` (`id`, `nama_template`, `judul_surat`, `konten`, `requires_parent_data`) VALUES
 (1, 'Surat Keterangan Domisili', 'SURAT KETERANGAN DOMISILI', 'Yang bertanda tangan di bawah ini, Ketua RT {{app.housing_name}}, dengan ini menerangkan bahwa:\n\nNama Lengkap: {{surat.nama_lengkap}}\nNIK: {{surat.nik}}\nTanggal Lahir: {{surat.tgl_lahir_formatted}}\nPekerjaan: {{surat.pekerjaan}}\nAlamat: {{surat.alamat}}\n\nAdalah benar warga kami yang berdomisili di alamat tersebut di atas. Surat keterangan ini dibuat sebagai pengantar untuk keperluan:\n\n{{surat.keperluan}}\n\nDemikian surat keterangan domisili ini dibuat untuk dapat dipergunakan sebagaimana mestinya.', 0),
 (2, 'Pengantar SKCK', 'SURAT PENGANTAR SKCK', 'Yang bertanda tangan di bawah ini, Ketua RT {{app.housing_name}}, dengan ini menerangkan bahwa:\n\nNama Lengkap: {{surat.nama_lengkap}}\nNIK: {{surat.nik}}\nAlamat: {{surat.alamat}}\n\nAdalah benar warga kami yang berdomisili di alamat tersebut di atas dan berkelakuan baik di lingkungan kami. Surat keterangan ini dibuat sebagai pengantar untuk mengurus SKCK di Kepolisian.\n\nKeperluan: {{surat.keperluan}}\n\nDemikian surat pengantar ini dibuat untuk dapat dipergunakan sebagaimana mestinya.', 0),
-(3, 'Pengantar Nikah', 'SURAT PENGANTAR NIKAH', 'Yang bertanda tangan di bawah ini, Ketua RT {{app.housing_name}}, dengan ini menerangkan bahwa:\n\nI. DATA CALON\nNama Lengkap: {{surat.nama_lengkap}}\nNIK: {{surat.nik}}\nTanggal Lahir: {{surat.tgl_lahir_formatted}}\nAlamat: {{surat.alamat}}\n\nII. DATA ORANG TUA / WALI\nAyah:\nNama Lengkap: {{data_ayah.nama_lengkap}}\nNIK: {{data_ayah.nik}}\n\nIbu:\nNama Lengkap: {{data_ibu.nama_lengkap}}\nNIK: {{data_ibu.nik}}\n\nAdalah benar warga kami yang berdomisili di alamat tersebut di atas. Surat pengantar ini dibuat sebagai salah satu syarat administrasi untuk mengurus pernikahan.\n\nDemikian surat pengantar ini dibuat untuk dapat dipergunakan sebagaimana mestinya.', 1);
+(3, 'Pengantar Nikah', 'SURAT PENGANTAR NIKAH', 'Yang bertanda tangan di bawah ini, Ketua RT {{app.housing_name}}, dengan ini menerangkan bahwa:\n\nI. DATA CALON\nNama Lengkap: {{surat.nama_lengkap}}\nNIK: {{surat.nik}}\nTanggal Lahir: {{surat.tgl_lahir_formatted}}\nAlamat: {{surat.alamat}}\n\nII. DATA ORANG TUA / WALI\nAyah:\nNama Lengkap: {{data_ayah.nama_lengkap}}\nNIK: {{data_ayah.nik}}\n\nIbu:\nNama Lengkap: {{data_ibu.nama_lengkap}}\nNIK: {{data_ibu.nik}}\n\nAdalah benar warga kami yang berdomisili di alamat tersebut di atas. Surat pengantar ini dibuat sebagai salah satu syarat administrasi untuk mengurus pernikahan.\n\nDemikian surat pengantar ini dibuat untuk dapat dipergunakan sebagaimana mestinya.', 1) ;
+
+INSERT INTO kas_kategori (nama_kategori, jenis) VALUES ('Tabungan Warga', 'masuk');
+INSERT INTO kas_kategori (nama_kategori, jenis) VALUES ('Tabungan Warga', 'keluar');

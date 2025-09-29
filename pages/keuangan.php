@@ -38,6 +38,19 @@ if (!$is_spa_request) {
                 </select>
             </div>
             <div class="col-auto ms-md-auto">
+                <label for="filter-bulan-kas" class="col-form-label">Periode:</label>
+            </div>
+            <div class="col-auto">
+                <select id="filter-bulan-kas" class="form-select">
+                    <!-- Options will be populated by JS -->
+                </select>
+            </div>
+            <div class="col-auto">
+                <select id="filter-tahun-kas" class="form-select">
+                    <!-- Options will be populated by JS -->
+                </select>
+            </div>
+            <div class="col-auto ms-md-auto">
                 <label for="kas-limit" class="col-form-label">Tampilkan:</label>
             </div>
             <div class="col-auto">

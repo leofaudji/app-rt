@@ -1,7 +1,6 @@
 <?php
 header('Content-Type: application/json');
 require_once __DIR__ . '/../includes/bootstrap.php';
-
 if (!isset($_SESSION['loggedin']) || $_SESSION['loggedin'] !== true) {
     http_response_code(401);
     echo json_encode(['status' => 'error', 'message' => 'Unauthorized']);
@@ -9,254 +8,195 @@ if (!isset($_SESSION['loggedin']) || $_SESSION['loggedin'] !== true) {
 }
 
 $conn = Database::getInstance()->getConnection();
-$action = $_REQUEST['action'] ?? '';
-$role = $_SESSION['role'];
+$action = $_REQUEST['action'] ?? null;
+$user_role = $_SESSION['role'];
+$user_id = $_SESSION['user_id'];
+$user_warga_id = null;
 
+// Get warga_id for the logged-in user if their role is 'warga'
+if ($user_role === 'warga') {
+    $stmt_warga = $conn->prepare("SELECT id FROM warga WHERE nama_panggilan = ?");
+    $stmt_warga->bind_param("s", $_SESSION['username']);
+    $stmt_warga->execute();
+    $user_warga_id = $stmt_warga->get_result()->fetch_assoc()['id'] ?? null;
+    $stmt_warga->close();
+}
 try {
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-        if ($action === 'summary' && in_array($role, ['admin', 'bendahara'])) {
-            $search = $_GET['search'] ?? '';
-            $query = "
-                SELECT 
-                    w.id as warga_id, w.nama_lengkap, w.no_kk, r.blok, r.nomor,
-                    (SELECT SUM(CASE WHEN jenis = 'setor' THEN jumlah ELSE -jumlah END) FROM tabungan_warga tw WHERE tw.warga_id = w.id) as saldo
-                FROM warga w
-                LEFT JOIN rumah r ON w.no_kk = r.no_kk_penghuni
-                WHERE w.status_dalam_keluarga = 'Kepala Keluarga'
-            ";
-            if (!empty($search)) {
-                $query .= " AND (w.nama_lengkap LIKE ? OR w.no_kk LIKE ?)";
-                $like_search = "%{$search}%";
-                $stmt = $conn->prepare($query);
-                $stmt->bind_param("ss", $like_search, $like_search);
-            } else {
-                $stmt = $conn->prepare($query);
-            }
-            $stmt->execute();
-            $result = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-            $stmt->close();
-            echo json_encode(['status' => 'success', 'data' => $result]);
-
-        } elseif ($action === 'detail') {
-            $warga_id = $_GET['warga_id'] ?? 0;
-
-            // Security check: Warga can only see their own details
-            if ($role === 'warga') {
-                $stmt_check = $conn->prepare("SELECT id FROM warga WHERE nama_panggilan = ?");
-                $stmt_check->bind_param("s", $_SESSION['username']);
-                $stmt_check->execute();
-                $user_warga_id = $stmt_check->get_result()->fetch_assoc()['id'] ?? 0;
-                if ($warga_id != $user_warga_id) {
-                    throw new Exception("Akses ditolak.");
+        switch ($action) {
+            case 'summary':
+                if (!in_array($user_role, ['admin', 'bendahara'])) throw new Exception("Akses ditolak.");
+                $search = $_GET['search'] ?? '';
+                $query = "SELECT w.id as warga_id, w.nama_lengkap, w.no_kk, r.blok, r.nomor, 
+                                 (SELECT SUM(CASE WHEN jenis = 'setor' THEN jumlah ELSE -jumlah END) FROM tabungan_warga tw WHERE tw.warga_id = w.id) as saldo
+                          FROM warga w
+                          JOIN rumah r ON w.no_kk = r.no_kk_penghuni
+                          WHERE w.status_dalam_keluarga = 'Kepala Keluarga'";
+                if (!empty($search)) {
+                    $query .= " AND w.nama_lengkap LIKE ?";
+                    $stmt = $conn->prepare($query);
+                    $searchTerm = "%{$search}%";
+                    $stmt->bind_param("s", $searchTerm);
+                } else {
+                    $stmt = $conn->prepare($query);
                 }
-            }
+                $stmt->execute();
+                $data = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+                echo json_encode(['status' => 'success', 'data' => $data]);
+                break;
 
-            $stmt_warga = $conn->prepare("SELECT id, nama_lengkap, no_kk FROM warga WHERE id = ?");
-            $stmt_warga->bind_param("i", $warga_id);
-            $stmt_warga->execute();
-            $warga_info = $stmt_warga->get_result()->fetch_assoc();
-            $stmt_warga->close();
-            if (!$warga_info) throw new Exception("Warga tidak ditemukan.");
+            case 'detail':
+                $warga_id = $_GET['warga_id'] ?? 0;
+                if ($user_role === 'warga' && $warga_id != $user_warga_id) {
+                    throw new Exception("Akses ditolak. Anda hanya dapat melihat detail tabungan Anda sendiri.");
+                }
 
-            $stmt_transaksi = $conn->prepare("
-                SELECT t.*, k.nama_kategori, u.nama_lengkap as pencatat 
-                FROM tabungan_warga t 
-                JOIN tabungan_kategori k ON t.kategori_id = k.id
-                LEFT JOIN users u ON t.dicatat_oleh = u.id
-                WHERE t.warga_id = ? 
-                ORDER BY t.tanggal DESC, t.created_at DESC
-            ");
-            $stmt_transaksi->bind_param("i", $warga_id);
-            $stmt_transaksi->execute();
-            $transactions = $stmt_transaksi->get_result()->fetch_all(MYSQLI_ASSOC);
-            $stmt_transaksi->close();
+                $stmt_warga = $conn->prepare("SELECT nama_lengkap, no_kk FROM warga WHERE id = ?");
+                $stmt_warga->bind_param("i", $warga_id);
+                $stmt_warga->execute();
+                $warga = $stmt_warga->get_result()->fetch_assoc();
 
-            $saldo = 0;
-            foreach ($transactions as $tx) {
-                $saldo += ($tx['jenis'] === 'setor' ? $tx['jumlah'] : -$tx['jumlah']);
-            }
+                $stmt_tx = $conn->prepare("SELECT t.*, u.nama_lengkap as pencatat, c.nama_kategori FROM tabungan_warga t LEFT JOIN users u ON t.dicatat_oleh = u.id JOIN tabungan_kategori c ON t.kategori_id = c.id WHERE t.warga_id = ? ORDER BY t.tanggal DESC, t.id DESC");
+                $stmt_tx->bind_param("i", $warga_id);
+                $stmt_tx->execute();
+                $transactions = $stmt_tx->get_result()->fetch_all(MYSQLI_ASSOC);
 
-            // Get savings goals
-            $stmt_goals = $conn->prepare("SELECT * FROM tabungan_goals WHERE warga_id = ? ORDER BY status, tanggal_target ASC");
-            $stmt_goals->bind_param("i", $warga_id);
-            $stmt_goals->execute();
-            $goals = $stmt_goals->get_result()->fetch_all(MYSQLI_ASSOC);
-            $stmt_goals->close();
+                $stmt_saldo = $conn->prepare("SELECT SUM(CASE WHEN jenis = 'setor' THEN jumlah ELSE -jumlah END) as saldo FROM tabungan_warga WHERE warga_id = ?");
+                $stmt_saldo->bind_param("i", $warga_id);
+                $stmt_saldo->execute();
+                $saldo = $stmt_saldo->get_result()->fetch_assoc()['saldo'] ?? 0;
 
-            echo json_encode([
-                'status' => 'success', 
-                'data' => [
-                    'warga' => $warga_info,
-                    'transactions' => $transactions,
-                    'saldo' => $saldo,
-                    'goals' => $goals
-                ]
-            ]);
-        } else {
-            throw new Exception("Aksi GET tidak valid.");
+                $stmt_goals = $conn->prepare("SELECT * FROM tabungan_goals WHERE warga_id = ? ORDER BY tanggal_target ASC");
+                $stmt_goals->bind_param("i", $warga_id);
+                $stmt_goals->execute();
+                $goals_raw = $stmt_goals->get_result()->fetch_all(MYSQLI_ASSOC);
+                $goals = [];
+                foreach ($goals_raw as $goal) {
+                    $stmt_progress = $conn->prepare("SELECT SUM(CASE WHEN jenis = 'setor' THEN jumlah ELSE -jumlah END) as terkumpul FROM tabungan_warga WHERE goal_id = ?");
+                    $stmt_progress->bind_param("i", $goal['id']);
+                    $stmt_progress->execute();
+                    $terkumpul = $stmt_progress->get_result()->fetch_assoc()['terkumpul'] ?? 0;
+                    $goal['terkumpul'] = (float)$terkumpul;
+                    $goals[] = $goal;
+                    $stmt_progress->close();
+                }
+
+                echo json_encode(['status' => 'success', 'data' => ['warga' => $warga, 'transactions' => $transactions, 'saldo' => $saldo, 'goals' => $goals]]);
+                break;
+
+            default:
+                throw new Exception("Aksi GET tidak valid.");
         }
     } elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
         switch ($action) {
             case 'add_transaction':
-                if (!in_array($role, ['admin', 'bendahara'])) {
-                    throw new Exception("Hanya admin atau bendahara yang dapat melakukan aksi ini.");
+                if (!in_array($user_role, ['admin', 'bendahara'])) throw new Exception("Akses ditolak.");
+                $goal_id = !empty($_POST['goal_id']) ? (int)$_POST['goal_id'] : null;
+                $stmt = $conn->prepare("INSERT INTO tabungan_warga (warga_id, tanggal, jenis, kategori_id, jumlah, keterangan, dicatat_oleh, goal_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+                $stmt->bind_param("issidsii", $_POST['warga_id'], $_POST['tanggal'], $_POST['jenis'], $_POST['kategori_id'], $_POST['jumlah'], $_POST['keterangan'], $user_id, $goal_id);
+                if (!$stmt->execute()) {
+                    throw new Exception("Gagal menyimpan transaksi tabungan: " . $stmt->error);
                 }
-                $warga_id = (int)($_POST['warga_id'] ?? 0);
-                $tanggal = $_POST['tanggal'] ?? '';
-                $jenis = $_POST['jenis'] ?? '';
-                $kategori_id = (int)($_POST['kategori_id'] ?? 0);
-                $jumlah = (float)($_POST['jumlah'] ?? 0);
-                $keterangan = $_POST['keterangan'] ?? null;
-                $dicatat_oleh = $_SESSION['user_id'];
+                $new_tabungan_id = $stmt->insert_id;
 
-                if (empty($warga_id) || empty($tanggal) || empty($jenis) || empty($kategori_id) || empty($jumlah)) {
-                    throw new Exception("Semua field wajib diisi.");
-                }
+                // --- Integrasi Otomatis ke Kas RT ---
+                $stmt_warga_nama = $conn->prepare("SELECT nama_lengkap FROM warga WHERE id = ?");
+                $stmt_warga_nama->bind_param("i", $_POST['warga_id']);
+                $stmt_warga_nama->execute();
+                $nama_warga = $stmt_warga_nama->get_result()->fetch_assoc()['nama_lengkap'] ?? 'Warga ID: ' . $_POST['warga_id'];
+                $stmt_warga_nama->close();
 
-                // Check saldo if withdrawal
-                if ($jenis === 'tarik') {
-                    $stmt_saldo = $conn->prepare("SELECT SUM(CASE WHEN jenis = 'setor' THEN jumlah ELSE -jumlah END) as saldo FROM tabungan_warga WHERE warga_id = ?");
-                    $stmt_saldo->bind_param("i", $warga_id);
-                    $stmt_saldo->execute();
-                    $current_saldo = (float)($stmt_saldo->get_result()->fetch_assoc()['saldo'] ?? 0);
-                    $stmt_saldo->close();
-                    if ($jumlah > $current_saldo) {
-                        throw new Exception("Penarikan gagal. Saldo tidak mencukupi (Saldo saat ini: " . number_format($current_saldo) . ").");
-                    }
-                }
+                $jenis_kas = ($_POST['jenis'] === 'setor') ? 'masuk' : 'keluar';
+                $keterangan_kas = ($_POST['jenis'] === 'setor' ? 'Setoran Tabungan: ' : 'Penarikan Tabungan: ') . $nama_warga . " (Ref Tabungan ID: {$new_tabungan_id})";
+                $kategori_kas = 'Tabungan Warga';
 
-                $stmt = $conn->prepare("INSERT INTO tabungan_warga (warga_id, tanggal, jenis, kategori_id, jumlah, keterangan, dicatat_oleh) VALUES (?, ?, ?, ?, ?, ?, ?)");
-                $stmt->bind_param("issidsi", $warga_id, $tanggal, $jenis, $kategori_id, $jumlah, $keterangan, $dicatat_oleh);
-                $stmt->execute();
-                $stmt->close();
+                $stmt_kas = $conn->prepare("INSERT INTO kas (tanggal, jenis, kategori, keterangan, jumlah, dicatat_oleh) VALUES (?, ?, ?, ?, ?, ?)");
+                $stmt_kas->bind_param("ssssdi", $_POST['tanggal'], $jenis_kas, $kategori_kas, $keterangan_kas, $_POST['jumlah'], $user_id);
+                $stmt_kas->execute();
+                $stmt_kas->close();
+                // --- Akhir Integrasi ---
 
-                log_activity($_SESSION['username'], 'Transaksi Tabungan', "Menambah transaksi {$jenis} Rp {$jumlah} untuk warga ID {$warga_id}");
-                echo json_encode(['status' => 'success', 'message' => 'Transaksi tabungan berhasil disimpan.']);
+                log_activity($_SESSION['username'], 'Tambah Transaksi Tabungan', 'Menambah transaksi untuk warga ID: ' . $_POST['warga_id']);
+                echo json_encode(['status' => 'success', 'message' => 'Transaksi tabungan berhasil ditambahkan.']);
                 break;
 
             case 'delete_transaction':
-                if (!in_array($role, ['admin', 'bendahara'])) {
-                    throw new Exception("Hanya admin atau bendahara yang dapat melakukan aksi ini.");
-                }
-                $id = (int)($_POST['id'] ?? 0);
-                if (empty($id)) throw new Exception("ID transaksi tidak valid.");
-
-                // Get transaction details before deleting for logging
-                $stmt_get = $conn->prepare("SELECT * FROM tabungan_warga WHERE id = ?");
-                $stmt_get->bind_param("i", $id);
-                $stmt_get->execute();
-                $tx = $stmt_get->get_result()->fetch_assoc();
-                $stmt_get->close();
-
-                if (!$tx) throw new Exception("Transaksi tidak ditemukan.");
-
-                // Re-check balance constraint upon deletion
-                $stmt_saldo = $conn->prepare("SELECT SUM(CASE WHEN jenis = 'setor' THEN jumlah ELSE -jumlah END) as saldo FROM tabungan_warga WHERE warga_id = ?");
-                $stmt_saldo->bind_param("i", $tx['warga_id']);
-                $stmt_saldo->execute();
-                $current_saldo = (float)($stmt_saldo->get_result()->fetch_assoc()['saldo'] ?? 0);
-                $stmt_saldo->close();
-
-                $saldo_after_delete = $current_saldo - ($tx['jenis'] === 'setor' ? $tx['jumlah'] : -$tx['jumlah']);
-                if ($saldo_after_delete < 0) {
-                    throw new Exception("Transaksi tidak dapat dihapus karena akan menyebabkan saldo menjadi negatif.");
-                }
-
+                if (!in_array($user_role, ['admin', 'bendahara'])) throw new Exception("Akses ditolak.");
                 $stmt = $conn->prepare("DELETE FROM tabungan_warga WHERE id = ?");
-                $stmt->bind_param("i", $id);
-                $stmt->execute();
-                $stmt->close();
+                $id_to_delete = $_POST['id'];
+                $stmt->bind_param("i", $id_to_delete);
+                if (!$stmt->execute()) {
+                    throw new Exception("Gagal menghapus transaksi tabungan: " . $stmt->error);
+                }
 
-                log_activity($_SESSION['username'], 'Hapus Transaksi Tabungan', "Menghapus transaksi tabungan ID: {$id}");
-                echo json_encode(['status' => 'success', 'message' => 'Transaksi berhasil dihapus.']);
+                // --- Hapus juga entri yang sesuai di tabel kas ---
+                $keterangan_ref = "%(Ref Tabungan ID: {$id_to_delete})%";
+                $stmt_delete_kas = $conn->prepare("DELETE FROM kas WHERE keterangan LIKE ?");
+                $stmt_delete_kas->bind_param("s", $keterangan_ref);
+                $stmt_delete_kas->execute();
+                $stmt_delete_kas->close();
+                // --- Akhir Hapus Integrasi ---
+
+                log_activity($_SESSION['username'], 'Hapus Transaksi Tabungan', 'Menghapus transaksi tabungan ID: ' . $_POST['id']);
+                echo json_encode(['status' => 'success', 'message' => 'Transaksi tabungan berhasil dihapus.']);
                 break;
 
             case 'add_goal':
-                // Find warga_id from user's nama_panggilan (username)
-                $stmt_warga_check = $conn->prepare("SELECT id FROM warga WHERE nama_panggilan = ?");
-                $stmt_warga_check->bind_param("s", $_SESSION['username']);
-                $stmt_warga_check->execute();
-                $warga = $stmt_warga_check->get_result()->fetch_assoc();
-                $warga_id = $warga['id'] ?? null;
-                $stmt_warga_check->close();
-                if (!$warga_id) {
-                    throw new Exception("Profil warga Anda tidak ditemukan.");
-                }
-                if ($role !== 'warga') throw new Exception("Hanya warga yang dapat menambah target tabungan.");
-                $nama_goal = trim($_POST['nama_goal'] ?? '');
-                $target_jumlah = (float)($_POST['target_jumlah'] ?? 0);
+                if ($user_role !== 'warga' || !$user_warga_id) throw new Exception("Hanya warga yang dapat menambah target.");
                 $tanggal_target = !empty($_POST['tanggal_target']) ? $_POST['tanggal_target'] : null;
-
-                if (empty($nama_goal) || empty($target_jumlah)) {
-                    throw new Exception("Nama target dan jumlah target wajib diisi.");
-                }
-
                 $stmt = $conn->prepare("INSERT INTO tabungan_goals (warga_id, nama_goal, target_jumlah, tanggal_target) VALUES (?, ?, ?, ?)");
-                $stmt->bind_param("isds", $warga_id, $nama_goal, $target_jumlah, $tanggal_target);
+                $stmt->bind_param("isds", $user_warga_id, $_POST['nama_goal'], $_POST['target_jumlah'], $tanggal_target);
                 $stmt->execute();
-                $stmt->close();
-                log_activity($_SESSION['username'], 'Tambah Target Tabungan', "Menambah target: {$nama_goal}");
+                log_activity($_SESSION['username'], 'Tambah Target Tabungan', 'Menambah target: ' . $_POST['nama_goal']);
                 echo json_encode(['status' => 'success', 'message' => 'Target tabungan berhasil ditambahkan.']);
                 break;
 
             case 'update_goal':
-                // Find warga_id from user's nama_panggilan (username)
-                $stmt_warga_check = $conn->prepare("SELECT id FROM warga WHERE nama_panggilan = ?");
-                $stmt_warga_check->bind_param("s", $_SESSION['username']);
-                $stmt_warga_check->execute();
-                $warga = $stmt_warga_check->get_result()->fetch_assoc();
-                $warga_id = $warga['id'] ?? null;
-                $stmt_warga_check->close();
-                if (!$warga_id) {
-                    throw new Exception("Profil warga Anda tidak ditemukan.");
-                }
-                if ($role !== 'warga') throw new Exception("Hanya warga yang dapat mengubah target tabungan.");
-                $goal_id = (int)($_POST['id'] ?? 0);
-                $nama_goal = trim($_POST['nama_goal'] ?? '');
-                $target_jumlah = (float)($_POST['target_jumlah'] ?? 0);
+                if ($user_role !== 'warga' || !$user_warga_id) throw new Exception("Hanya warga yang dapat mengubah target.");
+                $goal_id = $_POST['id'];
+                // Security check: ensure the goal belongs to the logged-in user
+                $stmt_check = $conn->prepare("SELECT id FROM tabungan_goals WHERE id = ? AND warga_id = ?");
+                $stmt_check->bind_param("ii", $goal_id, $user_warga_id);
+                $stmt_check->execute();
+                if ($stmt_check->get_result()->num_rows === 0) throw new Exception("Akses ditolak. Target tidak ditemukan.");
+                $stmt_check->close();
+
                 $tanggal_target = !empty($_POST['tanggal_target']) ? $_POST['tanggal_target'] : null;
-
-                if (empty($goal_id) || empty($nama_goal) || empty($target_jumlah)) {
-                    throw new Exception("Semua field wajib diisi.");
-                }
-
-                $stmt = $conn->prepare("UPDATE tabungan_goals SET nama_goal = ?, target_jumlah = ?, tanggal_target = ? WHERE id = ? AND warga_id = ?");
-                $stmt->bind_param("sdsii", $nama_goal, $target_jumlah, $tanggal_target, $goal_id, $warga_id);
+                $stmt = $conn->prepare("UPDATE tabungan_goals SET nama_goal = ?, target_jumlah = ?, tanggal_target = ? WHERE id = ?");
+                $stmt->bind_param("sdsi", $_POST['nama_goal'], $_POST['target_jumlah'], $tanggal_target, $goal_id);
                 $stmt->execute();
-                $stmt->close();
-                log_activity($_SESSION['username'], 'Update Target Tabungan', "Mengubah target ID: {$goal_id}");
+                log_activity($_SESSION['username'], 'Update Target Tabungan', 'Mengubah target ID: ' . $goal_id);
                 echo json_encode(['status' => 'success', 'message' => 'Target tabungan berhasil diperbarui.']);
                 break;
 
             case 'delete_goal':
-                // Find warga_id from user's nama_panggilan (username)
-                $stmt_warga_check = $conn->prepare("SELECT id FROM warga WHERE nama_panggilan = ?");
-                $stmt_warga_check->bind_param("s", $_SESSION['username']);
-                $stmt_warga_check->execute();
-                $warga = $stmt_warga_check->get_result()->fetch_assoc();
-                $warga_id = $warga['id'] ?? null;
-                $stmt_warga_check->close();
-                if (!$warga_id) {
-                    throw new Exception("Profil warga Anda tidak ditemukan.");
-                }
-                if ($role !== 'warga') throw new Exception("Hanya warga yang dapat menghapus target tabungan.");
-                $goal_id = (int)($_POST['id'] ?? 0);
-                if (empty($goal_id)) {
-                    throw new Exception("ID target tidak valid.");
-                }
-                $stmt = $conn->prepare("DELETE FROM tabungan_goals WHERE id = ? AND warga_id = ?");
-                $stmt->bind_param("ii", $goal_id, $warga_id);
+                if ($user_role !== 'warga' || !$user_warga_id) throw new Exception("Hanya warga yang dapat menghapus target.");
+                $goal_id = $_POST['id'];
+                // Security check: ensure the goal belongs to the logged-in user
+                $stmt_check = $conn->prepare("SELECT id FROM tabungan_goals WHERE id = ? AND warga_id = ?");
+                $stmt_check->bind_param("ii", $goal_id, $user_warga_id);
+                $stmt_check->execute();
+                if ($stmt_check->get_result()->num_rows === 0) throw new Exception("Akses ditolak. Target tidak ditemukan.");
+                $stmt_check->close();
+
+                $stmt = $conn->prepare("DELETE FROM tabungan_goals WHERE id = ?");
+                $stmt->bind_param("i", $goal_id);
                 $stmt->execute();
-                $stmt->close();
-                log_activity($_SESSION['username'], 'Hapus Target Tabungan', "Menghapus target ID: {$goal_id}");
+                log_activity($_SESSION['username'], 'Hapus Target Tabungan', 'Menghapus target ID: ' . $goal_id);
                 echo json_encode(['status' => 'success', 'message' => 'Target tabungan berhasil dihapus.']);
                 break;
 
-            default: throw new Exception("Aksi POST tidak valid.");
+            default:
+                throw new Exception("Aksi POST tidak valid.");
         }
-    } else { throw new Exception("Metode request tidak valid."); }
+    } else {
+        throw new Exception("Metode request tidak valid.");
+    }
 } catch (Exception $e) {
     http_response_code(400);
     echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
 }
+
+if (isset($stmt)) $stmt->close();
 $conn->close();
+?>

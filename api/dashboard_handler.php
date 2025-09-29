@@ -16,19 +16,50 @@ $filter_bulan = $_GET['bulan'] ?? date('m');
 $filter_tahun = $_GET['tahun'] ?? date('Y');
 
 try {
-    // Total Warga
+    $user_role = $_SESSION['role'];
+    $user_warga_id = null;
+
+    // Jika role adalah warga, cari warga_id mereka untuk filter data pribadi
+    if ($user_role === 'warga') {
+        $stmt_warga_id = $conn->prepare("SELECT id FROM warga WHERE nama_panggilan = ?");
+        if ($stmt_warga_id) {
+            $stmt_warga_id->bind_param("s", $_SESSION['username']);
+            $stmt_warga_id->execute();
+            $warga_result = $stmt_warga_id->get_result()->fetch_assoc();
+            $user_warga_id = $warga_result['id'] ?? null;
+            $stmt_warga_id->close();
+        }
+    }
+
+    // Total Warga (Visible to all)
     $result = $conn->query("SELECT COUNT(id) as total FROM warga");
     $data['total_warga'] = $result->fetch_assoc()['total'];
 
-    // Saldo Kas
+    // Saldo Kas (Visible to all)
     $result = $conn->query("SELECT (SELECT IFNULL(SUM(jumlah), 0) FROM kas WHERE jenis = 'masuk') - (SELECT IFNULL(SUM(jumlah), 0) FROM kas WHERE jenis = 'keluar') as saldo");
-    $saldo = $result->fetch_assoc()['saldo'];
-    $data['saldo_kas'] = 'Rp ' . number_format($saldo, 0, ',', '.');
+    $saldo_kas_raw = (float)($result->fetch_assoc()['saldo'] ?? 0);
+    $data['saldo_kas'] = 'Rp ' . number_format($saldo_kas_raw, 0, ',', '.');
 
     // Saldo Tabungan Warga
-    $result_tabungan = $conn->query("SELECT SUM(CASE WHEN jenis = 'setor' THEN jumlah ELSE -jumlah END) as saldo FROM tabungan_warga");
-    $saldo_tabungan = $result_tabungan->fetch_assoc()['saldo'] ?? 0;
-    $data['saldo_tabungan'] = 'Rp ' . number_format($saldo_tabungan, 0, ',', '.');
+    $query_saldo_tabungan = "SELECT SUM(CASE WHEN jenis = 'setor' THEN jumlah ELSE -jumlah END) as saldo FROM tabungan_warga";
+    if ($user_role === 'warga' && $user_warga_id) {
+        $stmt_tabungan = $conn->prepare($query_saldo_tabungan . " WHERE warga_id = ?");
+        if (!$stmt_tabungan) throw new Exception("Gagal menyiapkan query saldo tabungan.");
+        $stmt_tabungan->bind_param("i", $user_warga_id);
+        $stmt_tabungan->execute();
+        $saldo_tabungan_raw = (float)($stmt_tabungan->get_result()->fetch_assoc()['saldo'] ?? 0);
+        $stmt_tabungan->close();
+    } else {
+        $saldo_tabungan_raw = (float)($conn->query($query_saldo_tabungan)->fetch_assoc()['saldo'] ?? 0);
+    }
+    $data['saldo_tabungan'] = 'Rp ' . number_format($saldo_tabungan_raw, 0, ',', '.');
+    $data['saldo_tabungan_raw'] = $saldo_tabungan_raw; // Add this raw value for calculations
+
+    // Posisi Kas Bersih (Ekuitas RT)
+    if (in_array($user_role, ['admin', 'bendahara'])) {
+        $posisi_bersih = $saldo_kas_raw - $saldo_tabungan_raw;
+        $data['posisi_kas_bersih'] = 'Rp ' . number_format($posisi_bersih, 0, ',', '.');
+    }
 
     // --- Admin Tasks Widget Data ---
     $data['admin_tasks'] = [];
@@ -171,22 +202,39 @@ try {
     $trend_labels_tabungan = [];
     $trend_balances_tabungan = [];
 
+    $tabungan_filter_sql = '';
+    $tabungan_filter_params = [$start_date];
+    $tabungan_filter_types = 's';
+
+    if ($user_role === 'warga' && $user_warga_id) {
+        $tabungan_filter_sql = ' AND warga_id = ?';
+        $tabungan_filter_params[] = $user_warga_id;
+        $tabungan_filter_types .= 'i';
+    }
+
     // 1. Get the balance before this period
-    $stmt_saldo_awal_tabungan = $conn->prepare("SELECT SUM(CASE WHEN jenis = 'setor' THEN jumlah ELSE -jumlah END) as saldo FROM tabungan_warga WHERE tanggal < ?");
-    $stmt_saldo_awal_tabungan->bind_param("s", $start_date);
+    $stmt_saldo_awal_tabungan = $conn->prepare("SELECT SUM(CASE WHEN jenis = 'setor' THEN jumlah ELSE -jumlah END) as saldo FROM tabungan_warga WHERE tanggal < ? $tabungan_filter_sql");
+    $stmt_saldo_awal_tabungan->bind_param($tabungan_filter_types, ...$tabungan_filter_params);
     $stmt_saldo_awal_tabungan->execute();
     $running_balance_tabungan = (float)($stmt_saldo_awal_tabungan->get_result()->fetch_assoc()['saldo'] ?? 0);
     $stmt_saldo_awal_tabungan->close();
 
     // 2. Get monthly deposits/withdrawals for the last 6 months
+    // Reset params for the next query (start_date is the only param)
+    $tabungan_filter_params = [$start_date];
+    $tabungan_filter_types = 's';
+    if ($user_role === 'warga' && $user_warga_id) {
+        $tabungan_filter_params[] = $user_warga_id;
+        $tabungan_filter_types .= 'i';
+    }
     $stmt_trend_tabungan = $conn->prepare("
         SELECT YEAR(tanggal) as tahun, MONTH(tanggal) as bulan,
                SUM(CASE WHEN jenis = 'setor' THEN jumlah ELSE 0 END) as setoran,
                SUM(CASE WHEN jenis = 'tarik' THEN jumlah ELSE 0 END) as penarikan
-        FROM tabungan_warga WHERE tanggal >= ?
+        FROM tabungan_warga WHERE tanggal >= ? $tabungan_filter_sql
         GROUP BY YEAR(tanggal), MONTH(tanggal) ORDER BY tahun, bulan
     ");
-    $stmt_trend_tabungan->bind_param("s", $start_date);
+    $stmt_trend_tabungan->bind_param($tabungan_filter_types, ...$tabungan_filter_params);
     $stmt_trend_tabungan->execute();
     $monthly_transactions_tabungan = $stmt_trend_tabungan->get_result()->fetch_all(MYSQLI_ASSOC);
     $transactions_map_tabungan = [];
@@ -244,6 +292,25 @@ try {
         $stmt_tunggakan->execute();
         $data['iuran_menunggak'] = $stmt_tunggakan->get_result()->fetch_all(MYSQLI_ASSOC);
         $stmt_tunggakan->close();
+    }
+    
+    // --- Savings Goals for Warga ---
+    $data['savings_goals'] = [];
+    if ($user_role === 'warga' && $user_warga_id) {
+        $stmt_goals = $conn->prepare("SELECT * FROM tabungan_goals WHERE warga_id = ? AND status = 'aktif' ORDER BY tanggal_target ASC");
+        $stmt_goals->bind_param("i", $user_warga_id);
+        $stmt_goals->execute();
+        $goals_raw = $stmt_goals->get_result()->fetch_all(MYSQLI_ASSOC);
+        foreach ($goals_raw as $goal) {
+            $stmt_progress = $conn->prepare("SELECT SUM(CASE WHEN jenis = 'setor' THEN jumlah ELSE -jumlah END) as terkumpul FROM tabungan_warga WHERE goal_id = ?");
+            $stmt_progress->bind_param("i", $goal['id']);
+            $stmt_progress->execute();
+            $terkumpul = $stmt_progress->get_result()->fetch_assoc()['terkumpul'] ?? 0;
+            $goal['terkumpul'] = (float)$terkumpul;
+            $data['savings_goals'][] = $goal;
+            $stmt_progress->close();
+        }
+        $stmt_goals->close();
     }
 
     echo json_encode(['status' => 'success', 'data' => $data]);

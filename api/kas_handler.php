@@ -26,6 +26,8 @@ try {
         // --- GET: Mengambil daftar transaksi kas ---
         $search = $_GET['search'] ?? '';
         $jenis = $_GET['jenis'] ?? '';
+        $bulan = $_GET['bulan'] ?? '';
+        $tahun = $_GET['tahun'] ?? '';
         $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
         $limit_str = $_GET['limit'] ?? '10';
         $use_limit = $limit_str !== 'all';
@@ -50,6 +52,18 @@ try {
             $count_query .= " AND k.jenis = ?";
             $params[] = $jenis;
             $types .= 's';
+        }
+        if (!empty($bulan)) {
+            $data_query .= " AND MONTH(k.tanggal) = ?";
+            $count_query .= " AND MONTH(k.tanggal) = ?";
+            $params[] = $bulan;
+            $types .= 'i';
+        }
+        if (!empty($tahun)) {
+            $data_query .= " AND YEAR(k.tanggal) = ?";
+            $count_query .= " AND YEAR(k.tanggal) = ?";
+            $params[] = $tahun;
+            $types .= 'i';
         }
 
         // Get total records for pagination
